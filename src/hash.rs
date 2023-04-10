@@ -8,15 +8,16 @@ use hashbrown::hash_map::DefaultHashBuilder;
 use hashbrown::HashMap;
 
 use crate::{
+    collection::VebTreeCollectionMarker,
     key::{Owned, VebKey},
-    tree::{TreeCollectionMarker, VebTreeMarker},
+    tree::VebTreeMarker,
     RemoveResult, VebTree,
 };
 
 #[phantom]
 pub struct HashMapMarker<#[invariant] Tree = (), #[invariant] S = DefaultHashBuilder>;
 
-impl<K, V, Tree, S> TreeCollectionMarker<K, V> for HashMapMarker<Tree, S>
+impl<K, V, Tree, S> VebTreeCollectionMarker<K, V> for HashMapMarker<Tree, S>
 where
     K: VebKey,
     K::High: 'static + Hash,

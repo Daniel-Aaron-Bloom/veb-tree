@@ -1,7 +1,12 @@
-use core::borrow::Borrow;
-use hashbrown::hash_map::{RawOccupiedEntryMut, RawVacantEntryMut};
-use hashbrown::HashMap;
-use std::hash::{BuildHasher, Hash};
+use core::{
+    borrow::Borrow,
+    hash::{BuildHasher, Hash},
+};
+
+use hashbrown::{
+    hash_map::{RawOccupiedEntryMut, RawVacantEntryMut},
+    HashMap,
+};
 
 use crate::key::VebKey;
 use crate::{key::Owned, VebTree};
@@ -41,6 +46,10 @@ where
 {
     type TC = T;
     type Tree = T::Tree;
+}
+
+pub trait VebTreeCollectionMarker<K: VebKey, V> {
+    type TreeCollection: SuperTreeCollection<K, V>;
 }
 
 /// All operations are assumed to be `O(1)` complexity

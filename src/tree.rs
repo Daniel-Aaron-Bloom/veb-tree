@@ -2,16 +2,12 @@ use core::{borrow::Borrow, cmp::Ordering, mem::replace};
 
 use ghost::phantom;
 
-use crate::collection::{Entry, SuperTreeCollection, TreeCollection};
+use crate::collection::{Entry, SuperTreeCollection, TreeCollection, VebTreeCollectionMarker};
 use crate::key::{MaybeBorrowed, Owned, VebKey};
 use crate::{RemoveResult, VebTree};
 
 pub trait VebTreeMarker<K, V> {
     type Tree: VebTree<Key = K, Value = V>;
-}
-
-pub trait TreeCollectionMarker<K: VebKey, V> {
-    type TreeCollection: SuperTreeCollection<K, V>;
 }
 
 #[phantom]
@@ -21,7 +17,7 @@ impl<K, V, Summary, Children> VebTreeMarker<K, V> for TreeMarker<Summary, Childr
 where
     K: VebKey,
     Summary: VebTreeMarker<K::High, ()>,
-    Children: TreeCollectionMarker<K, V>,
+    Children: VebTreeCollectionMarker<K, V>,
     for<'a> <Summary::Tree as VebTree>::MinKey<'a>: Into<Owned<K::HValue<'a>>>,
     for<'a> <Summary::Tree as VebTree>::MaxKey<'a>: Into<Owned<K::HValue<'a>>>,
     for<'a> <Summary::Tree as VebTree>::EntryKey<'a>: Into<Owned<K::HValue<'a>>>,
@@ -34,15 +30,15 @@ where
 }
 
 type TC<Children, K, V> =
-    <<Children as TreeCollectionMarker<K, V>>::TreeCollection as SuperTreeCollection<K, V>>::TC;
+    <<Children as VebTreeCollectionMarker<K, V>>::TreeCollection as SuperTreeCollection<K, V>>::TC;
 type TCT<Children, K, V> =
-    <<Children as TreeCollectionMarker<K, V>>::TreeCollection as SuperTreeCollection<K, V>>::Tree;
+    <<Children as VebTreeCollectionMarker<K, V>>::TreeCollection as SuperTreeCollection<K, V>>::Tree;
 
 pub struct Tree<K, V, Summary, Children>
 where
     K: VebKey,
     Summary: VebTreeMarker<K::High, ()>,
-    Children: TreeCollectionMarker<K, V>,
+    Children: VebTreeCollectionMarker<K, V>,
 {
     min: (K, V),
     data: Option<TreeData<Summary, Children, K, V>>,
@@ -52,7 +48,7 @@ struct TreeData<Summary, Children, K, V>
 where
     K: VebKey,
     Summary: VebTreeMarker<K::High, ()>,
-    Children: TreeCollectionMarker<K, V>,
+    Children: VebTreeCollectionMarker<K, V>,
 {
     max: (K, V),
     children: Option<(Summary::Tree, TC<Children, K, V>)>,
@@ -62,7 +58,7 @@ impl<Summary, Children, K, V> VebTree for Tree<K, V, Summary, Children>
 where
     K: VebKey,
     Summary: VebTreeMarker<K::High, ()>,
-    Children: TreeCollectionMarker<K, V>,
+    Children: VebTreeCollectionMarker<K, V>,
 
     for<'a> <Summary::Tree as VebTree>::MinKey<'a>: Into<Owned<K::HValue<'a>>>,
     for<'a> <Summary::Tree as VebTree>::MaxKey<'a>: Into<Owned<K::HValue<'a>>>,
