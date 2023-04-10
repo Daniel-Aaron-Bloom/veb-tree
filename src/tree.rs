@@ -71,11 +71,11 @@ where
     type Key = K;
     type Value = V;
     type MinKey<'a> = &'a K
-    where (K, V, Children, Summary): 'a;
+    where (Self, K): 'a;
     type MaxKey<'a> = &'a K
-    where (K, V, Children, Summary): 'a;
+    where (Self, K): 'a;
     type EntryKey<'a> = MaybeBorrowed<'a, K>
-    where (K, V, Children, Summary): 'a;
+    where (Self, K): 'a;
 
     /// O(1)
     fn from_monad(key: K, val: V) -> Self {
@@ -806,7 +806,7 @@ mod test {
     use core::fmt;
 
     use crate::{
-        bitset::BitSetMarker, hash::HashMapMarker, key::MaybeBorrowed, RemoveResult, VebTree,
+        bitset::ByteSetMarker, hash::HashMapMarker, key::MaybeBorrowed, RemoveResult, VebTree,
     };
 
     use super::Tree;
@@ -865,9 +865,9 @@ mod test {
     fn simple() {
         //VebTree
         type U16Tree = Tree<
-            u16,          // Key
-            &'static str, // Value
-            BitSetMarker, // Summary
+            u16,           // Key
+            &'static str,  // Value
+            ByteSetMarker, // Summary
             // Children
             HashMapMarker<
                 HashMapMarker, // Child "tree"

@@ -3,18 +3,24 @@ use core::{
     ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign},
 };
 
-use crate::{key::Owned, tree::VebTreeMarker, RemoveResult, VebTree};
+use crate::{
+    collection::{Entry, TreeCollection, TreeRemoveResult},
+    key::Owned,
+    tree::VebTreeMarker,
+    RemoveResult, VebTree,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BitSet([u128; 2], ());
+/// 32 bytes of memory to store all possible `u8`, All operations are `O(1)`.
+pub struct ByteSet([u128; 2], ());
 
-pub struct BitSetMarker;
+pub struct ByteSetMarker;
 
-impl VebTreeMarker<u8, ()> for BitSetMarker {
-    type Tree = BitSet;
+impl VebTreeMarker<u8, ()> for ByteSetMarker {
+    type Tree = ByteSet;
 }
 
-impl BitSet {
+impl ByteSet {
     pub fn len(&self) -> usize {
         self.0.into_iter().map(u128::count_ones).sum::<u32>() as usize
     }
@@ -36,47 +42,47 @@ impl BitSet {
     }
 }
 
-impl BitOr<u8> for BitSet {
+impl BitOr<u8> for ByteSet {
     type Output = Self;
     fn bitor(mut self, rhs: u8) -> Self::Output {
         self |= rhs;
         self
     }
 }
-impl BitOrAssign<u8> for BitSet {
+impl BitOrAssign<u8> for ByteSet {
     fn bitor_assign(&mut self, rhs: u8) {
         self.0[rhs as usize / 128] |= 1 << (rhs % 128);
     }
 }
 
-impl BitAnd<u8> for BitSet {
+impl BitAnd<u8> for ByteSet {
     type Output = bool;
     fn bitand(self, rhs: u8) -> Self::Output {
         self.0[rhs as usize / 128] & 1 << (rhs % 128) != 0
     }
 }
 
-impl BitAndAssign for BitSet {
+impl BitAndAssign for ByteSet {
     fn bitand_assign(&mut self, rhs: Self) {
         self.0[0] &= rhs.0[0];
         self.0[1] &= rhs.0[1];
     }
 }
 
-impl BitXor<u8> for BitSet {
+impl BitXor<u8> for ByteSet {
     type Output = Self;
     fn bitxor(mut self, rhs: u8) -> Self::Output {
         self ^= rhs;
         self
     }
 }
-impl BitXorAssign<u8> for BitSet {
+impl BitXorAssign<u8> for ByteSet {
     fn bitxor_assign(&mut self, rhs: u8) {
         self.0[rhs as usize / 128] &= !(1 << (rhs % 128));
     }
 }
 
-impl VebTree for BitSet {
+impl VebTree for ByteSet {
     type Key = u8;
     type Value = ();
     type MinKey<'a> = u8;
@@ -262,15 +268,30 @@ impl VebTree for BitSet {
     }
 }
 
+pub struct ByteMap<V> {
+    set: ByteSet,
+    values: V,
+}
+
+trait TreeList {
+    type Tree: VebTree;
+}
+
+/// All operations are assumed to be `O(1)` complexity
+// impl<V: TreeList> TreeCollection for ByteMap<V>{
+//     type High = u8;
+//     type Tree = V::Tree;
+// }
+
 #[cfg(test)]
 mod test {
     use crate::VebTree;
 
-    use super::BitSet;
+    use super::ByteSet;
 
     #[test]
     fn simple() {
-        let mut set = BitSet::from_monad(0, ());
+        let mut set = ByteSet::from_monad(0, ());
         for i in 1..=255u8 {
             assert_eq!(set.lowest(), 0);
             assert_eq!(set.highest(), i - 1);
@@ -281,7 +302,7 @@ mod test {
         }
         assert_eq!(set.highest(), 255);
 
-        let mut set = BitSet::from_monad(0, ());
+        let mut set = ByteSet::from_monad(0, ());
         for i in 1..=255u8 {
             assert_eq!(set.successor(i - 1), None);
             assert_eq!(set.lowest(), i - 1);

@@ -32,18 +32,15 @@ pub trait VebTree: Sized {
     /// The key return type of [`VebTree::min_val`].
     type MinKey<'a>: Borrow<Self::Key> + Into<Owned<Self::Key>> + Into<Self::EntryKey<'a>>
     where
-        Self: 'a,
-        Self::Key: 'a;
+        (Self, Self::Key): 'a;
     /// The key return type of [`VebTree::max_val`].
     type MaxKey<'a>: Borrow<Self::Key> + Into<Owned<Self::Key>> + Into<Self::EntryKey<'a>>
     where
-        Self: 'a,
-        Self::Key: 'a;
+        (Self, Self::Key): 'a;
     /// The key return type for other methods.
     type EntryKey<'a>: Clone + Borrow<Self::Key> + Into<Owned<Self::Key>>
     where
-        Self: 'a,
-        Self::Key: 'a;
+        (Self, Self::Key): 'a;
 
     /// Construct a monad tree from `key`.
     ///
