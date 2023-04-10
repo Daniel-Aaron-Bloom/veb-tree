@@ -10,6 +10,7 @@ use key::Owned;
 
 /// The possible results from a call to [`VebTree::remove`]
 #[must_use]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum RemoveResult<K> {
     /// The requested key was found and deleted succeeded
     Removed(K),

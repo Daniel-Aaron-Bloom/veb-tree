@@ -52,6 +52,13 @@ pub trait VebTreeCollectionMarker<K: VebKey, V> {
     type TreeCollection: SuperTreeCollection<K, V>;
 }
 
+pub struct TreeRemoveResult<Q, H, T> {
+    pub key: Q,
+    pub high: H,
+    pub tree: T,
+    pub empty: bool,
+}
+
 /// All operations are assumed to be `O(1)` complexity
 pub trait TreeCollection {
     /// The key used to index this collection
@@ -88,7 +95,7 @@ pub trait TreeCollection {
         Q: Borrow<Self::High> + Into<Owned<Self::High>>;
 
     /// Remove the tree from an occupied entry
-    fn remove<'a, Q>(o: Self::Occupied<'a, Q>) -> (Q, Self::High, Self::Tree);
+    fn remove<'a, Q>(o: Self::Occupied<'a, Q>) -> TreeRemoveResult<Q, Self::High, Self::Tree>;
 
     /// Construct a collection from a single entry
     fn create(h: &Self::High, tree: Self::Tree) -> Self;
@@ -110,6 +117,7 @@ pub trait TreeCollection {
 pub struct EntryWrapper<E, Q> {
     entry: E,
     key: Q,
+    len: usize,
 }
 
 impl<High, V, S> TreeCollection for HashMap<High, V, S>
@@ -145,9 +153,14 @@ where
         v.entry.insert(v.key.into().0, tree).1
     }
 
-    fn remove<'a, Q>(o: Self::Occupied<'a, Q>) -> (Q, Self::High, Self::Tree) {
+    fn remove<'a, Q>(o: Self::Occupied<'a, Q>) -> TreeRemoveResult<Q, Self::High, Self::Tree> {
         let (k, v) = o.entry.remove_entry();
-        (o.key, k, v)
+        TreeRemoveResult {
+            key: o.key,
+            high: k,
+            tree: v,
+            empty: o.len == 1, // if this was the final tree, we are empty
+        }
     }
 
     fn create(h: &Self::High, tree: Self::Tree) -> Self {
@@ -166,9 +179,10 @@ where
         key: Q,
     ) -> Entry<Self::Occupied<'_, Q>, Self::Vacant<'_, Q>> {
         use hashbrown::hash_map::RawEntryMut;
+        let len = self.len();
         match self.raw_entry_mut().from_key(key.borrow()) {
-            RawEntryMut::Occupied(entry) => Entry::Occupied(EntryWrapper { entry, key }),
-            RawEntryMut::Vacant(entry) => Entry::Vacant(EntryWrapper { entry, key }),
+            RawEntryMut::Occupied(entry) => Entry::Occupied(EntryWrapper { entry, key, len }),
+            RawEntryMut::Vacant(entry) => Entry::Vacant(EntryWrapper { entry, key, len }),
         }
     }
 }

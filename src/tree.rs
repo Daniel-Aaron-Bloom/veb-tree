@@ -628,64 +628,78 @@ where
             Some(TreeData {
                 max,
                 children: Some((summary, mut children)),
-            }) => {
-                if max.0 == *k.borrow() {
-                    // Start by looking for the largest subtree
-                    let (high, ()) = summary.max_val();
-                    // We should always find an entry, since we're starting from the summary
-                    let mut child = match children.entry(high.borrow()) {
-                        Entry::Occupied(v) => v,
-                        Entry::Vacant(_) => unreachable!(),
-                    };
-                    // Try to remove the smallest entry from the subtree
-                    let (low, val) = TC::<Children, K, V>::deref(&mut child)
-                        .1
-                        .remove_max()
-                        // Or remove the subtree entirely if it's a monad
-                        .unwrap_or_else(|| {
-                            TC::<Children, K, V>::remove(child)
-                                .2
-                                .into_monad()
-                                .ok()
-                                .expect("Expected monad")
-                        });
-
-                    let high = high.into().0;
-                    self.data = Some(TreeData {
-                        max: (K::join(high, low.into()), val),
-                        children: Some((summary, children)),
+            }) if max.0 == *k.borrow() => {
+                // Start by looking for the largest subtree
+                let (high, ()) = summary.max_val();
+                // We should always find an entry, since we're starting from the summary
+                let mut child = match children.entry(high.borrow()) {
+                    Entry::Occupied(v) => v,
+                    Entry::Vacant(_) => unreachable!(),
+                };
+                // Try to remove the smallest entry from the subtree
+                let (low, val, empty) = TC::<Children, K, V>::deref(&mut child)
+                    .1
+                    .remove_max()
+                    .map(|(low, val)| (low, val, false))
+                    // Or remove the subtree entirely if it's a monad
+                    .unwrap_or_else(|| {
+                        let result = TC::<Children, K, V>::remove(child);
+                        let (low, val) = result.tree.into_monad().ok().expect("Expected monad");
+                        (low, val, result.empty)
                     });
-                    RemoveResult::Removed(max)
-                } else {
-                    let (high, low) = K::split(k);
 
-                    let res = loop {
-                        let (low, val) = {
-                            let mut child = match children.entry(high.borrow()) {
-                                Entry::Occupied(v) => v,
-                                Entry::Vacant(_) => break RemoveResult::NotPresent,
-                            };
+                let high = high.into().0;
+                self.data = Some(TreeData {
+                    max: (K::join(high, low.into()), val),
+                    children: if empty {
+                        None
+                    } else {
+                        Some((summary, children))
+                    },
+                });
+                RemoveResult::Removed(max)
+            }
 
-                            match TC::<Children, K, V>::deref(&mut child).1.remove(low) {
-                                RemoveResult::NotPresent => break RemoveResult::NotPresent,
-                                RemoveResult::Monad => TC::<Children, K, V>::remove(child)
-                                    .2
-                                    .into_monad()
-                                    .ok()
-                                    .expect("Expected monad"),
-                                RemoveResult::Removed(low) => low,
-                            }
+            Some(TreeData {
+                max,
+                children: Some((summary, mut children)),
+            }) => {
+                let (high, low) = K::split(k);
+
+                let (res, empty) = loop {
+                    let (low, val, empty) = {
+                        let mut child = match children.entry(high.borrow()) {
+                            Entry::Occupied(v) => v,
+                            Entry::Vacant(_) => break (RemoveResult::NotPresent, false),
                         };
 
-                        break RemoveResult::Removed((K::join(high, low.into()), val));
+                        match TC::<Children, K, V>::deref(&mut child).1.remove(low) {
+                            RemoveResult::NotPresent => break (RemoveResult::NotPresent, false),
+                            RemoveResult::Monad => {
+                                let result = TC::<Children, K, V>::remove(child);
+                                let (low, val) =
+                                    result.tree.into_monad().ok().expect("Expected monad");
+                                (low, val, result.empty)
+                            }
+                            RemoveResult::Removed((low, val)) => (low, val, false),
+                        }
                     };
 
-                    self.data = Some(TreeData {
-                        max,
-                        children: Some((summary, children)),
-                    });
-                    return res;
-                }
+                    break (
+                        RemoveResult::Removed((K::join(high, low.into()), val)),
+                        empty,
+                    );
+                };
+
+                self.data = Some(TreeData {
+                    max,
+                    children: if empty {
+                        None
+                    } else {
+                        Some((summary, children))
+                    },
+                });
+                return res;
             }
         };
     }
@@ -713,22 +727,25 @@ where
                     Entry::Vacant(_) => unreachable!(),
                 };
                 // Try to remove the smallest entry from the subtree
-                let (low, val) = TC::<Children, K, V>::deref(&mut child)
+                let (low, val, empty) = TC::<Children, K, V>::deref(&mut child)
                     .1
                     .remove_min()
+                    .map(|(low, val)| (low, val, false))
                     // Or remove the subtree entirely if it's a monad
                     .unwrap_or_else(|| {
-                        TC::<Children, K, V>::remove(child)
-                            .2
-                            .into_monad()
-                            .ok()
-                            .expect("Expected monad")
+                        let result = TC::<Children, K, V>::remove(child);
+                        let (low, val) = result.tree.into_monad().ok().expect("Expected monad");
+                        (low, val, result.empty)
                     });
 
                 let min = K::join(high.into().0, low.into());
                 self.data = Some(TreeData {
                     max,
-                    children: Some((summary, children)),
+                    children: if empty {
+                        None
+                    } else {
+                        Some((summary, children))
+                    },
                 });
                 Some(replace(&mut self.min, (min, val)))
             }
@@ -758,22 +775,25 @@ where
                     Entry::Vacant(_) => unreachable!(),
                 };
                 // Try to remove the smallest entry from the subtree
-                let (low, val) = TC::<Children, K, V>::deref(&mut child)
+                let (low, val, empty) = TC::<Children, K, V>::deref(&mut child)
                     .1
                     .remove_max()
+                    .map(|(low, val)| (low, val, false))
                     // Or remove the subtree entirely if it's a monad
                     .unwrap_or_else(|| {
-                        TC::<Children, K, V>::remove(child)
-                            .2
-                            .into_monad()
-                            .ok()
-                            .expect("Expected monad")
+                        let result = TC::<Children, K, V>::remove(child);
+                        let (low, val) = result.tree.into_monad().ok().expect("Expected monad");
+                        (low, val, result.empty)
                     });
 
                 let high = high.into().0;
                 self.data = Some(TreeData {
                     max: (K::join(high, low.into()), val),
-                    children: Some((summary, children)),
+                    children: if empty {
+                        None
+                    } else {
+                        Some((summary, children))
+                    },
                 });
                 Some(max)
             }
@@ -785,7 +805,7 @@ where
 mod test {
     use core::fmt;
 
-    use crate::{hash::HashMapMarker, key::MaybeBorrowed, VebTree};
+    use crate::{hash::HashMapMarker, key::MaybeBorrowed, RemoveResult, VebTree};
 
     use super::Tree;
 
@@ -964,6 +984,81 @@ mod test {
                 (12, Some((13, "c"))),
                 (13, Some((15, "b"))),
                 (14, Some((15, "b"))),
+                (15, None),
+                (16, None),
+            ],
+        );
+
+        v.insert(14, "d");
+        assert_eq!(v.remove(14), RemoveResult::Removed((14, "d")));
+        verify::<_, _, U16Tree>(
+            &mut v,
+            entry,
+            [
+                (9, None),
+                (10, Some((10, "a"))),
+                (11, None),
+                (12, None),
+                (13, Some((13, "c"))),
+                (14, None),
+                (15, Some((15, "b"))),
+                (16, None),
+            ],
+            [
+                (9, None),
+                (10, None),
+                (11, Some((10, "a"))),
+                (12, Some((10, "a"))),
+                (13, Some((10, "a"))),
+                (14, Some((13, "c"))),
+                (15, Some((13, "c"))),
+                (16, Some((15, "b"))),
+            ],
+            [
+                (9, Some((10, "a"))),
+                (10, Some((13, "c"))),
+                (11, Some((13, "c"))),
+                (12, Some((13, "c"))),
+                (13, Some((15, "b"))),
+                (14, Some((15, "b"))),
+                (15, None),
+                (16, None),
+            ],
+        );
+
+        assert_eq!(v.remove(15), RemoveResult::Removed((15, "b")));
+        assert_eq!(v.min_val(), (&10, &"a"));
+        assert_eq!(v.max_val(), (&13, &"c"));
+        verify::<_, _, U16Tree>(
+            &mut v,
+            entry,
+            [
+                (9, None),
+                (10, Some((10, "a"))),
+                (11, None),
+                (12, None),
+                (13, Some((13, "c"))),
+                (14, None),
+                (15, None),
+                (16, None),
+            ],
+            [
+                (9, None),
+                (10, None),
+                (11, Some((10, "a"))),
+                (12, Some((10, "a"))),
+                (13, Some((10, "a"))),
+                (14, Some((13, "c"))),
+                (15, Some((13, "c"))),
+                (16, Some((13, "c"))),
+            ],
+            [
+                (9, Some((10, "a"))),
+                (10, Some((13, "c"))),
+                (11, Some((13, "c"))),
+                (12, Some((13, "c"))),
+                (13, None),
+                (14, None),
                 (15, None),
                 (16, None),
             ],
