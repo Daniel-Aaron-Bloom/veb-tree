@@ -93,10 +93,10 @@ pub trait TreeCollection {
         Q: Borrow<Self::High>;
 
     /// Dereference an occupied entry
-    fn deref<'a, 'b, Q>(v: &'a mut Self::Occupied<'b, Q>) -> &'a mut Self::Tree;
+    fn deref<'a, 'b, Q>(o: &'a mut Self::Occupied<'b, Q>) -> &'a mut Self::Tree;
 
     /// Decompose an occupied entry
-    fn decompose<'a, Q>(v: Self::Occupied<'a, Q>) -> (Q, &'a mut Self::Tree);
+    fn decompose<'a, Q>(o: Self::Occupied<'a, Q>) -> (Q, &'a mut Self::Tree);
 
     /// Remove the tree from an occupied entry
     fn remove<'a, Q>(o: Self::Occupied<'a, Q>) -> TreeRemoveResult<Q, Self::High, Self::Tree>;
@@ -154,12 +154,12 @@ where
         }
     }
 
-    fn deref<'a, 'b, Q>(v: &'a mut Self::Occupied<'b, Q>) -> &'a mut Self::Tree {
-        v.entry.get_mut()
+    fn deref<'a, 'b, Q>(o: &'a mut Self::Occupied<'b, Q>) -> &'a mut Self::Tree {
+        o.entry.get_mut()
     }
 
-    fn decompose<'a, Q>(v: Self::Occupied<'a, Q>) -> (Q, &'a mut Self::Tree) {
-        (v.key, v.entry.into_mut())
+    fn decompose<'a, Q>(o: Self::Occupied<'a, Q>) -> (Q, &'a mut Self::Tree) {
+        (o.key, o.entry.into_mut())
     }
 
     fn remove<'a, Q>(o: Self::Occupied<'a, Q>) -> TreeRemoveResult<Q, Self::High, Self::Tree> {

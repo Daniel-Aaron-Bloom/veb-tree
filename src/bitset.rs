@@ -71,32 +71,28 @@ impl ByteSet {
     }
 }
 
-impl BitOr<u8> for ByteSet {
+struct ByteSetKey(u8);
+
+impl BitOr<ByteSetKey> for ByteSet {
     type Output = Self;
-    fn bitor(mut self, rhs: u8) -> Self::Output {
+    fn bitor(mut self, rhs: ByteSetKey) -> Self::Output {
         self |= rhs;
         self
     }
 }
-impl BitOrAssign<u8> for ByteSet {
-    fn bitor_assign(&mut self, rhs: u8) {
-        self.0[rhs as usize / 128] |= 1 << (rhs % 128);
+impl BitOrAssign<ByteSetKey> for ByteSet {
+    fn bitor_assign(&mut self, rhs: ByteSetKey) {
+        self.0[rhs.0 as usize / 128] |= 1 << (rhs.0 % 128);
     }
 }
 
-impl BitAnd<u8> for ByteSet {
+impl BitAnd<ByteSetKey> for ByteSet {
     type Output = bool;
-    fn bitand(self, rhs: u8) -> Self::Output {
-        self.0[rhs as usize / 128] & 1 << (rhs % 128) != 0
+    fn bitand(self, rhs: ByteSetKey) -> Self::Output {
+        self.0[rhs.0 as usize / 128] & 1 << (rhs.0 % 128) != 0
     }
 }
 
-impl BitAndAssign for ByteSet {
-    fn bitand_assign(&mut self, rhs: Self) {
-        self.0[0] &= rhs.0[0];
-        self.0[1] &= rhs.0[1];
-    }
-}
 impl BitAndAssign<ByteSet> for [u128; 2] {
     fn bitand_assign(&mut self, rhs: ByteSet) {
         self[0] &= rhs.0[0];
@@ -104,16 +100,16 @@ impl BitAndAssign<ByteSet> for [u128; 2] {
     }
 }
 
-impl BitXor<u8> for ByteSet {
+impl BitXor<ByteSetKey> for ByteSet {
     type Output = Self;
-    fn bitxor(mut self, rhs: u8) -> Self::Output {
+    fn bitxor(mut self, rhs: ByteSetKey) -> Self::Output {
         self ^= rhs;
         self
     }
 }
-impl BitXorAssign<u8> for ByteSet {
-    fn bitxor_assign(&mut self, rhs: u8) {
-        self.0[rhs as usize / 128] &= !(1 << (rhs % 128));
+impl BitXorAssign<ByteSetKey> for ByteSet {
+    fn bitxor_assign(&mut self, rhs: ByteSetKey) {
+        self.0[rhs.0 as usize / 128] &= !(1 << (rhs.0 % 128));
     }
 }
 
@@ -125,7 +121,7 @@ impl VebTree for ByteSet {
     type EntryKey<'a> = u8;
 
     fn from_monad(k: Self::Key, v: Self::Value) -> Self {
-        Self([0; 2], v) | k
+        Self([0; 2], v) | ByteSetKey(k)
     }
     fn is_monad(&self) -> bool {
         self.len() == 1
@@ -158,7 +154,7 @@ impl VebTree for ByteSet {
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {
         let v = k.into().0;
-        if *self & v {
+        if *self & ByteSetKey(v) {
             Some((v, &self.1))
         } else {
             None
@@ -169,7 +165,7 @@ impl VebTree for ByteSet {
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {
         let v = k.into().0;
-        if *self & v {
+        if *self & ByteSetKey(v) {
             Some((v, &mut self.1))
         } else {
             None
@@ -212,10 +208,10 @@ impl VebTree for ByteSet {
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {
         let k = k.into().0;
-        if *self & k {
+        if *self & ByteSetKey(k) {
             Some((k, v))
         } else {
-            *self |= k;
+            *self |= ByteSetKey(k);
             None
         }
     }
@@ -228,8 +224,8 @@ impl VebTree for ByteSet {
             return RemoveResult::Monad;
         }
         let k = k.into().0;
-        if *self & k {
-            *self ^= k;
+        if *self & ByteSetKey(k) {
+            *self ^= ByteSetKey(k);
             RemoveResult::Removed((k, ()))
         } else {
             RemoveResult::NotPresent
@@ -240,7 +236,7 @@ impl VebTree for ByteSet {
             return None;
         }
         let k = self.lowest();
-        *self ^= k;
+        *self ^= ByteSetKey(k);
         Some((k, ()))
     }
     fn remove_max(&mut self) -> Option<(Self::Key, Self::Value)> {
@@ -248,7 +244,7 @@ impl VebTree for ByteSet {
             return None;
         }
         let k = self.highest();
-        *self ^= k;
+        *self ^= ByteSetKey(k);
         Some((k, ()))
     }
 }
@@ -263,13 +259,15 @@ pub trait TreeList {
     fn from_monad(v: Self::Tree) -> Self;
 
     fn get(&self, i: usize) -> &Self::Tree;
-    fn get_mut(&self, i: usize) -> &mut Self::Tree;
+    fn get_mut(&mut self, i: usize) -> &mut Self::Tree;
+    fn remove(&mut self, i: usize) -> Self::Tree;
 }
 
 pub struct Vacant;
 pub struct Occupied<'a, Q, L> {
     key: Q,
-    list: &'a mut L,
+    high: u8,
+    map: &'a mut ByteMap<L>,
     index: usize,
 }
 
@@ -291,7 +289,7 @@ impl<L: TreeList> TreeCollection for ByteMap<L> {
     }
 
     fn get(&self, h: &u8) -> Option<&Self::Tree> {
-        if !(self.set & *h) {
+        if !(self.set & ByteSetKey(*h)) {
             return None;
         }
         let mut v = ByteSet::mask_lower(*h);
@@ -299,7 +297,7 @@ impl<L: TreeList> TreeCollection for ByteMap<L> {
         Some(self.list.get(ByteSet::array_len(v)))
     }
     fn get_mut(&mut self, h: &u8) -> Option<&mut Self::Tree> {
-        if !(self.set & *h) {
+        if !(self.set & ByteSetKey(*h)) {
             return None;
         }
         let mut v = ByteSet::mask_lower(*h);
@@ -311,14 +309,16 @@ impl<L: TreeList> TreeCollection for ByteMap<L> {
         &mut self,
         key: Q,
     ) -> Entry<Self::Occupied<'_, Q>, Self::Vacant<'_, Q>> {
-        let mut v = ByteSet::mask_lower(*key.borrow());
+        let high = *key.borrow();
+        let mut v = ByteSet::mask_lower(high);
         v &= self.set;
         let index = ByteSet::array_len(v);
 
-        if self.set & *key.borrow() {
+        if self.set & ByteSetKey(*key.borrow()) {
             Entry::Occupied(Occupied {
                 key,
-                list: &mut self.list,
+                high,
+                map: self,
                 index,
             })
         } else {
@@ -326,16 +326,23 @@ impl<L: TreeList> TreeCollection for ByteMap<L> {
         }
     }
 
-    fn deref<'a, 'b, Q>(v: &'a mut Occupied<'b, Q, L>) -> &'a mut Self::Tree {
-        todo!()
+    fn deref<'a, 'b, Q>(o: &'a mut Occupied<'b, Q, L>) -> &'a mut Self::Tree {
+        o.map.list.get_mut(o.index)
     }
 
-    fn decompose<'a, Q>(v: Self::Occupied<'a, Q>) -> (Q, &'a mut Self::Tree) {
-        todo!()
+    fn decompose<'a, Q>(o: Self::Occupied<'a, Q>) -> (Q, &'a mut Self::Tree) {
+        (o.key, o.map.list.get_mut(o.index))
     }
 
     fn remove<'a, Q>(o: Occupied<'a, Q, L>) -> TreeRemoveResult<Q, u8, Self::Tree> {
-        todo!()
+        let tree = o.map.list.remove(o.index);
+        o.map.set ^= ByteSetKey(o.high);
+        TreeRemoveResult{
+            key: o.key,
+            high: o.high,
+            tree,
+            empty: todo!()
+        }
     }
 
     fn key<'a, 'b, Q: Borrow<u8>>(v: &'a Vacant) -> &'a u8 {
@@ -352,7 +359,7 @@ impl<L: TreeList> TreeCollection for ByteMap<L> {
 
 #[cfg(test)]
 mod test {
-    use crate::VebTree;
+    use crate::{VebTree, RemoveResult};
 
     use super::ByteSet;
 
@@ -363,7 +370,7 @@ mod test {
             assert_eq!(set.lowest(), 0);
             assert_eq!(set.highest(), i - 1);
             assert_eq!(set.predecessor(i), Some((i - 1, &())));
-            set |= i;
+            set.insert(i, ());
             assert_eq!(set.successor(0), Some((1, &())));
             assert_eq!(set.successor(i - 1), Some((i, &())));
             assert_eq!(set.predecessor(i), Some((i - 1, &())));
@@ -377,13 +384,13 @@ mod test {
             assert_eq!(set.highest(), i - 1);
             assert_eq!(set.predecessor(i - 1), None);
             assert_eq!(set.predecessor(i), Some((i - 1, &())));
-            set |= i;
+            set.insert(i, ());
             if i > 1 {
                 assert_eq!(set.successor(0), Some((i - 1, &())));
             }
             assert_eq!(set.successor(i - 1), Some((i, &())));
             assert_eq!(set.highest(), i);
-            set ^= i - 1;
+            assert_eq!(set.remove(i-1), RemoveResult::Removed(((i-1), ())));
             assert_eq!(set.successor(0), Some((i, &())));
         }
         assert_eq!(set.lowest(), 255);
