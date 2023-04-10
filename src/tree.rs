@@ -1,33 +1,76 @@
 use core::{borrow::Borrow, cmp::Ordering, mem::replace};
 
-use crate::collection::{Entry, TreeCollection};
+use ghost::phantom;
+
+use crate::collection::{Entry, SuperTreeCollection, TreeCollection};
 use crate::key::{MaybeBorrowed, Owned, VebKey};
 use crate::{RemoveResult, VebTree};
 
-pub struct Tree<Summary, Children, K, V> {
+pub trait VebTreeMarker<K, V> {
+    type Tree: VebTree<Key = K, Value = V>;
+}
+
+pub trait TreeCollectionMarker<K: VebKey, V> {
+    type TreeCollection: SuperTreeCollection<K, V>;
+}
+
+#[phantom]
+pub struct TreeMarker<#[invariant] Summary, #[invariant] Children>;
+
+impl<K, V, Summary, Children> VebTreeMarker<K, V> for TreeMarker<Summary, Children>
+where
+    K: VebKey,
+    Summary: VebTreeMarker<K::High, ()>,
+    Children: TreeCollectionMarker<K, V>,
+    for<'a> <Summary::Tree as VebTree>::MinKey<'a>: Into<Owned<K::HValue<'a>>>,
+    for<'a> <Summary::Tree as VebTree>::MaxKey<'a>: Into<Owned<K::HValue<'a>>>,
+    for<'a> <Summary::Tree as VebTree>::EntryKey<'a>: Into<Owned<K::HValue<'a>>>,
+
+    for<'a> <TCT<Children, K, V> as VebTree>::MinKey<'a>: Into<Owned<K::LValue<'a>>>,
+    for<'a> <TCT<Children, K, V> as VebTree>::MaxKey<'a>: Into<Owned<K::LValue<'a>>>,
+    for<'a> <TCT<Children, K, V> as VebTree>::EntryKey<'a>: Into<Owned<K::LValue<'a>>>,
+{
+    type Tree = Tree<K, V, Summary, Children>;
+}
+
+type TC<Children, K, V> =
+    <<Children as TreeCollectionMarker<K, V>>::TreeCollection as SuperTreeCollection<K, V>>::TC;
+type TCT<Children, K, V> =
+    <<Children as TreeCollectionMarker<K, V>>::TreeCollection as SuperTreeCollection<K, V>>::Tree;
+
+pub struct Tree<K, V, Summary, Children>
+where
+    K: VebKey,
+    Summary: VebTreeMarker<K::High, ()>,
+    Children: TreeCollectionMarker<K, V>,
+{
     min: (K, V),
     data: Option<TreeData<Summary, Children, K, V>>,
 }
 
-struct TreeData<Summary, Children, K, V> {
-    max: (K, V),
-    children: Option<(Summary, Children)>,
-}
-
-impl<Summary, Children, K, V> VebTree for Tree<Summary, Children, K, V>
+struct TreeData<Summary, Children, K, V>
 where
     K: VebKey,
-    Children: TreeCollection<High = K::High>,
-    Children::Tree: VebTree<Key = K::Low, Value = V>,
-    Summary: VebTree<Key = K::High, Value = ()>,
+    Summary: VebTreeMarker<K::High, ()>,
+    Children: TreeCollectionMarker<K, V>,
+{
+    max: (K, V),
+    children: Option<(Summary::Tree, TC<Children, K, V>)>,
+}
 
-    for<'a> Summary::MinKey<'a>: Into<K::HValue<'a>>,
-    for<'a> Summary::MaxKey<'a>: Into<K::HValue<'a>>,
-    for<'a> Summary::EntryKey<'a>: Into<K::HValue<'a>>,
+impl<Summary, Children, K, V> VebTree for Tree<K, V, Summary, Children>
+where
+    K: VebKey,
+    Summary: VebTreeMarker<K::High, ()>,
+    Children: TreeCollectionMarker<K, V>,
 
-    for<'a> <Children::Tree as VebTree>::MinKey<'a>: Into<K::LValue<'a>>,
-    for<'a> <Children::Tree as VebTree>::MaxKey<'a>: Into<K::LValue<'a>>,
-    for<'a> <Children::Tree as VebTree>::EntryKey<'a>: Into<K::LValue<'a>>,
+    for<'a> <Summary::Tree as VebTree>::MinKey<'a>: Into<Owned<K::HValue<'a>>>,
+    for<'a> <Summary::Tree as VebTree>::MaxKey<'a>: Into<Owned<K::HValue<'a>>>,
+    for<'a> <Summary::Tree as VebTree>::EntryKey<'a>: Into<Owned<K::HValue<'a>>>,
+
+    for<'a> <TCT<Children, K, V> as VebTree>::MinKey<'a>: Into<Owned<K::LValue<'a>>>,
+    for<'a> <TCT<Children, K, V> as VebTree>::MaxKey<'a>: Into<Owned<K::LValue<'a>>>,
+    for<'a> <TCT<Children, K, V> as VebTree>::EntryKey<'a>: Into<Owned<K::LValue<'a>>>,
 {
     type Key = K;
     type Value = V;
@@ -131,7 +174,7 @@ where
         // Then ask that node for the successor to `low`. This is expected to short circuit if `low` is outside the range of `child`
         let (low, val) = children.get(high.borrow())?.find(low)?;
 
-        Some((MaybeBorrowed::Owned(K::join(high, low.into())), val))
+        Some((MaybeBorrowed::Owned(K::join(high, low.into().0)), val))
     }
 
     /// O(lg lg K)
@@ -179,7 +222,7 @@ where
         // Then ask that node for the successor to `low`. This is expected to short circuit if `low` is outside the range of `child`
         let (low, val) = children.get_mut(high.borrow())?.find_mut(low)?;
 
-        Some((MaybeBorrowed::Owned(K::join(high, low.into())), val))
+        Some((MaybeBorrowed::Owned(K::join(high, low.into().0)), val))
     }
 
     /// O(lg lg K)
@@ -212,7 +255,10 @@ where
                 let (high, ()) = summary.max_val();
                 let child = children.get(high.borrow()).unwrap();
                 let (low, val) = child.max_val();
-                return Some((MaybeBorrowed::Owned(K::join(high.into(), low.into())), val));
+                return Some((
+                    MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
+                    val,
+                ));
             }
             (Ordering::Less, None) => {
                 if *k.borrow() <= self.min.0 {
@@ -232,13 +278,16 @@ where
             .get(high.borrow())
             .and_then(|child| child.predecessor(low));
         Some(match low {
-            Some((low, val)) => (MaybeBorrowed::Owned(K::join(high, low.into())), val),
+            Some((low, val)) => (MaybeBorrowed::Owned(K::join(high, low.into().0)), val),
             // If we didn't find it, find the successor to `high` in the summary and use the `min` of that node
             None => {
                 let (high, ()) = summary.predecessor(high).unwrap();
                 let child = children.get(high.borrow()).unwrap();
                 let (low, val) = child.max_val();
-                (MaybeBorrowed::Owned(K::join(high.into(), low.into())), val)
+                (
+                    MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
+                    val,
+                )
             }
         })
     }
@@ -273,7 +322,10 @@ where
                 let (high, ()) = summary.max_val();
                 let child = children.get_mut(high.borrow()).unwrap();
                 let (low, val) = child.max_val_mut();
-                return Some((MaybeBorrowed::Owned(K::join(high.into(), low.into())), val));
+                return Some((
+                    MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
+                    val,
+                ));
             }
             (Ordering::Less, None) => {
                 if *k.borrow() <= self.min.0 {
@@ -290,15 +342,20 @@ where
         // Try to find the child where `k` is expected to live (identified by `high`)
         // Then ask that node for the successor to `low`. This is expected to short circuit if `low` is outside the range of `child`
         {
+            // FIXME: rust-lang/rust#106116
+            // Remove this when core::ptr::from_mut is stabilized
+            pub fn from_mut<T: ?Sized>(r: &mut T) -> *mut T {
+                r
+            }
             // FIXME: rust-lang/rust#43234
             // Remove this unsafe hack when NLL works
-            let children = unsafe { &mut *(children as *mut Children) };
+            let children = unsafe { &mut *from_mut(children) };
 
             let low = children
                 .get_mut(high.borrow())
                 .and_then(|child| child.predecessor_mut(low));
             if let Some((low, val)) = low {
-                return Some((MaybeBorrowed::Owned(K::join(high, low.into())), val));
+                return Some((MaybeBorrowed::Owned(K::join(high, low.into().0)), val));
             }
         }
 
@@ -306,7 +363,10 @@ where
         let (high, ()) = summary.predecessor(high).unwrap();
         let child = children.get_mut(high.borrow()).unwrap();
         let (low, val) = child.max_val_mut();
-        Some((MaybeBorrowed::Owned(K::join(high.into(), low.into())), val))
+        Some((
+            MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
+            val,
+        ))
     }
 
     /// O(lg lg K)
@@ -340,7 +400,10 @@ where
                 let (high, ()) = summary.min_val();
                 let child = children.get(high.borrow()).unwrap();
                 let (low, val) = child.min_val();
-                return Some((MaybeBorrowed::Owned(K::join(high.into(), low.into())), val));
+                return Some((
+                    MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
+                    val,
+                ));
             }
             (_, Some(data)) if *k.borrow() >= data.max.0 => return None,
             (
@@ -367,13 +430,16 @@ where
             .get(high.borrow())
             .and_then(|child| child.successor(low));
         Some(match low {
-            Some((low, val)) => (MaybeBorrowed::Owned(K::join(high, low.into())), val),
+            Some((low, val)) => (MaybeBorrowed::Owned(K::join(high, low.into().0)), val),
             // If we didn't find it, find the successor to `high` in the summary and use the `min` of that node
             None => {
                 let (high, ()) = summary.successor(high).unwrap();
                 let child = children.get(high.borrow()).unwrap();
                 let (low, val) = child.min_val();
-                (MaybeBorrowed::Owned(K::join(high.into(), low.into())), val)
+                (
+                    MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
+                    val,
+                )
             }
         })
     }
@@ -409,7 +475,10 @@ where
                 let (high, ()) = summary.min_val();
                 let child = children.get_mut(high.borrow()).unwrap();
                 let (low, val) = child.min_val_mut();
-                return Some((MaybeBorrowed::Owned(K::join(high.into(), low.into())), val));
+                return Some((
+                    MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
+                    val,
+                ));
             }
             (_, Some(data)) if *k.borrow() >= data.max.0 => return None,
             (
@@ -433,15 +502,20 @@ where
         // Try to find the child where `k` is expected to live (identified by `high`)
         // Then ask that node for the successor to `low`. This is expected to short circuit if `low` is outside the range of `child`
         {
+            // FIXME: rust-lang/rust#106116
+            // Remove this when core::ptr::from_mut is stabilized
+            pub fn from_mut<T: ?Sized>(r: &mut T) -> *mut T {
+                r
+            }
             // FIXME: rust-lang/rust#43234
             // Remove this unsafe hack when NLL works
-            let children = unsafe { &mut *(children as *mut Children) };
+            let children = unsafe { &mut *from_mut(children) };
 
             let low = children
                 .get_mut(high.borrow())
                 .and_then(|child| child.successor_mut(low));
             if let Some((low, val)) = low {
-                return Some((MaybeBorrowed::Owned(K::join(high, low.into())), val));
+                return Some((MaybeBorrowed::Owned(K::join(high, low.into().0)), val));
             }
             drop(low)
         }
@@ -449,7 +523,10 @@ where
         let (high, ()) = summary.successor(high).unwrap();
         let child = children.get_mut(high.borrow()).unwrap();
         let (low, val) = child.min_val_mut();
-        Some((MaybeBorrowed::Owned(K::join(high.into(), low.into())), val))
+        Some((
+            MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
+            val,
+        ))
     }
 
     /// O(lg lg K)
@@ -458,7 +535,7 @@ where
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {
         // See if `k` should take the place of `min`. If so, swap them and store the previous `min` in subtrees
-        let ((high, low), v, data) = match (self.min.0.cmp(k.borrow()), self.data.as_mut()) {
+        let ((high, low), v, data) = match (k.borrow().cmp(&self.min.0), self.data.as_mut()) {
             (Ordering::Equal, _) => return Some(replace(&mut self.min, (k.into().0, v))),
             // Monad path
             (Ordering::Less, None) => {
@@ -500,20 +577,21 @@ where
         if let Some((summary, children)) = &mut data.children {
             match children.entry(high) {
                 Entry::Occupied(entry) => {
-                    let (high, child) = Children::decompose(entry);
+                    let (high, child) = TC::<Children, K, V>::decompose(entry);
                     child
                         .insert(low.into().0, v)
                         .map(|(low, v)| (K::join(high, low.into()), v))
                 }
                 Entry::Vacant(entry) => {
-                    summary.insert(Children::key(&entry).clone(), ());
-                    Children::insert(entry, VebTree::from_monad(low.into().0, v));
+                    summary.insert(TC::<Children, K, V>::key(&entry).clone(), ());
+                    TC::<Children, K, V>::insert(entry, VebTree::from_monad(low.into().0, v));
                     None
                 }
             }
         } else {
-            let children = Children::create(high.borrow(), VebTree::from_monad(low.into().0, v));
-            let summary = Summary::from_monad(high.into().0, ());
+            let children =
+                TC::<Children, K, V>::create(high.borrow(), VebTree::from_monad(low.into().0, v));
+            let summary = <Summary::Tree as VebTree>::from_monad(high.into().0, ());
             data.children = Some((summary, children));
             None
         }
@@ -565,20 +643,21 @@ where
                         Entry::Vacant(_) => unreachable!(),
                     };
                     // Try to remove the smallest entry from the subtree
-                    let (low, val) = Children::deref(&mut child)
+                    let (low, val) = TC::<Children, K, V>::deref(&mut child)
                         .1
                         .remove_max()
                         // Or remove the subtree entirely if it's a monad
                         .unwrap_or_else(|| {
-                            Children::remove(child)
+                            TC::<Children, K, V>::remove(child)
                                 .2
                                 .into_monad()
                                 .ok()
                                 .expect("Expected monad")
                         });
 
+                    let high = high.into().0;
                     self.data = Some(TreeData {
-                        max: (K::join(high.into(), low.into()), val),
+                        max: (K::join(high, low.into()), val),
                         children: Some((summary, children)),
                     });
                     RemoveResult::Removed(max)
@@ -592,9 +671,9 @@ where
                                 Entry::Vacant(_) => break RemoveResult::NotPresent,
                             };
 
-                            match Children::deref(&mut child).1.remove(low) {
+                            match TC::<Children, K, V>::deref(&mut child).1.remove(low) {
                                 RemoveResult::NotPresent => break RemoveResult::NotPresent,
-                                RemoveResult::Monad => Children::remove(child)
+                                RemoveResult::Monad => TC::<Children, K, V>::remove(child)
                                     .2
                                     .into_monad()
                                     .ok()
@@ -639,19 +718,19 @@ where
                     Entry::Vacant(_) => unreachable!(),
                 };
                 // Try to remove the smallest entry from the subtree
-                let (low, val) = Children::deref(&mut child)
+                let (low, val) = TC::<Children, K, V>::deref(&mut child)
                     .1
                     .remove_min()
                     // Or remove the subtree entirely if it's a monad
                     .unwrap_or_else(|| {
-                        Children::remove(child)
+                        TC::<Children, K, V>::remove(child)
                             .2
                             .into_monad()
                             .ok()
                             .expect("Expected monad")
                     });
 
-                let min = K::join(high.into(), low.into());
+                let min = K::join(high.into().0, low.into());
                 self.data = Some(TreeData {
                     max,
                     children: Some((summary, children)),
@@ -684,20 +763,21 @@ where
                     Entry::Vacant(_) => unreachable!(),
                 };
                 // Try to remove the smallest entry from the subtree
-                let (low, val) = Children::deref(&mut child)
+                let (low, val) = TC::<Children, K, V>::deref(&mut child)
                     .1
                     .remove_max()
                     // Or remove the subtree entirely if it's a monad
                     .unwrap_or_else(|| {
-                        Children::remove(child)
+                        TC::<Children, K, V>::remove(child)
                             .2
                             .into_monad()
                             .ok()
                             .expect("Expected monad")
                     });
 
+                let high = high.into().0;
                 self.data = Some(TreeData {
-                    max: (K::join(high.into(), low.into()), val),
+                    max: (K::join(high, low.into()), val),
                     children: Some((summary, children)),
                 });
                 Some(max)
@@ -708,15 +788,49 @@ where
 
 #[cfg(test)]
 mod test {
-    use hashbrown::HashMap;
-
-    use crate::VebTree;
+    use crate::{hash::HashMapMarker, key::MaybeBorrowed, VebTree};
 
     use super::Tree;
 
     #[test]
     fn simple() {
-        // let v =
-        //     Tree::<_, HashMap<u8, Tree<u8, HashMap<_, Tree>, _, _>>, _, _>::from_monad(0u16, ());
+        //VebTree
+        type U16Tree = Tree<
+            u16,
+            (),
+            HashMapMarker, // Summary
+            // Children
+            HashMapMarker<
+                HashMapMarker, // Child "tree"
+            >,
+        >;
+        let mut v = U16Tree::from_monad(10, ());
+
+        assert_eq!(v.find(10), Some((MaybeBorrowed::Owned(10), &())));
+        assert_eq!(v.find(13), None);
+        assert_eq!(v.min_val(), (&10, &()));
+        assert_eq!(v.max_val(), (&10, &()));
+        assert_eq!(v.predecessor(9), None);
+        assert_eq!(v.predecessor(10), None);
+        assert_eq!(v.predecessor(13), Some((MaybeBorrowed::Owned(10), &())));
+        assert_eq!(v.predecessor(14), Some((MaybeBorrowed::Owned(10), &())));
+        assert_eq!(v.successor(9), Some((MaybeBorrowed::Owned(10), &())));
+        assert_eq!(v.successor(10), None);
+        assert_eq!(v.successor(13), None);
+        assert_eq!(v.successor(14), None);
+
+        v.insert(13, ());
+        assert_eq!(v.find(10), Some((MaybeBorrowed::Owned(10), &())));
+        assert_eq!(v.find(13), Some((MaybeBorrowed::Owned(13), &())));
+        assert_eq!(v.min_val(), (&10, &()));
+        assert_eq!(v.max_val(), (&13, &()));
+        assert_eq!(v.predecessor(9), None);
+        assert_eq!(v.predecessor(10), None);
+        assert_eq!(v.predecessor(13), Some((MaybeBorrowed::Owned(10), &())));
+        assert_eq!(v.predecessor(14), Some((MaybeBorrowed::Owned(13), &())));
+        assert_eq!(v.successor(9), Some((MaybeBorrowed::Owned(10), &())));
+        assert_eq!(v.successor(10), Some((MaybeBorrowed::Owned(13), &())));
+        assert_eq!(v.successor(13), None);
+        assert_eq!(v.successor(14), None);
     }
 }

@@ -3,6 +3,7 @@ use hashbrown::hash_map::{RawOccupiedEntryMut, RawVacantEntryMut};
 use hashbrown::HashMap;
 use std::hash::{BuildHasher, Hash};
 
+use crate::key::VebKey;
 use crate::{key::Owned, VebTree};
 
 /// A view into a single entry in a collection
@@ -25,6 +26,21 @@ impl<O, V> Entry<O, V> {
             Self::Vacant(v) => Ok(v),
         }
     }
+}
+
+/// A marker trait to help with associated type bounds
+pub trait SuperTreeCollection<K: VebKey, V> {
+    type Tree: VebTree<Key = K::Low, Value = V>;
+    type TC: TreeCollection<High = K::High, Tree = Self::Tree>;
+}
+
+impl<K: VebKey, V, T> SuperTreeCollection<K, V> for T
+where
+    T: TreeCollection<High = K::High>,
+    T::Tree: VebTree<Key = K::Low, Value = V>,
+{
+    type TC = T;
+    type Tree = T::Tree;
 }
 
 /// All operations are assumed to be `O(1)` complexity

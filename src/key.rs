@@ -27,6 +27,15 @@ pub enum MaybeBorrowed<'a, B> {
     Owned(B),
 }
 
+impl<'l, 'r, L, R> PartialEq<MaybeBorrowed<'r, R>> for MaybeBorrowed<'l, L>
+where
+    L: PartialEq<R>,
+{
+    fn eq(&self, other: &MaybeBorrowed<'r, R>) -> bool {
+        **self == **other
+    }
+}
+
 impl<'a, B> From<B> for MaybeBorrowed<'a, B> {
     fn from(b: B) -> Self {
         Self::Owned(b)
@@ -271,100 +280,6 @@ impl VebKey for i16 {
     }
 }
 
-/*
-impl VebKey for i128 {
-    type High = i64;
-    type Low = i64;
-    fn split<'a>(v: impl Into<MaybeBorrowed<'a, Self>>) -> (MaybeBorrowed<'a, Self::High>, MaybeBorrowed<'a, Self::Low>)
-    where Self: 'a {
-        let v = v.into();
-        let (a, b) = u128::split(v as u128);
-
-        a.into_or_clone()
-
-    }
-    fn join(hi: MaybeBorrowed<Self::High>, lo: MaybeBorrowed<Self::Low>) -> Self {
-        (*hi as i128) << 64 | *lo as i128
-    }
-}
-
-impl VebKey for u64 {
-    type High = u32;
-    type Low = u32;
-    fn split(v: MaybeBorrowed<Self>) -> (MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) {
-        (((&*v >> 32) as u32).into(), ((&*v & u32::MAX as u64) as u32).into())
-    }
-    fn join(hi: MaybeBorrowed<Self::High>, lo: MaybeBorrowed<Self::Low>) -> Self {
-        (*hi as u64) << 32 | *lo as u64
-    }
-}
-
-impl VebKey for i64 {
-    type High = i32;
-    type Low = i32;
-    fn split(v: MaybeBorrowed<Self>) -> (MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) {
-        (((&*v >> 32) as i32).into(), ((&*v & i32::MAX as i64) as i32).into())
-    }
-    fn join(hi: MaybeBorrowed<Self::High>, lo: MaybeBorrowed<Self::Low>) -> Self {
-        (*hi as i64) << 32 | *lo as i64
-    }
-}
-
-impl VebKey for u32 {
-    type High = u16;
-    type Low = u16;
-    fn split(v: MaybeBorrowed<Self>) -> (MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) {
-        (((&*v >> 16) as u16).into(), ((&*v & u16::MAX as u32) as u16).into())
-    }
-    fn join(hi: MaybeBorrowed<Self::High>, lo: MaybeBorrowed<Self::Low>) -> Self {
-        (*hi as u32) << 16 | *lo as u32
-    }
-}
-
-impl VebKey for i32 {
-    type High = i16;
-    type Low = i16;
-    fn split(v: MaybeBorrowed<Self>) -> (MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) {
-        (((&*v >> 16) as i16).into(), ((&*v & i16::MAX as i32) as i16).into())
-    }
-    fn join(hi: MaybeBorrowed<Self::High>, lo: MaybeBorrowed<Self::Low>) -> Self {
-        (*hi as i32) << 16 | *lo as i32
-    }
-}
-
-impl VebKey for u16 {
-    type High = u8;
-    type Low = u8;
-    fn split(v: MaybeBorrowed<Self>) -> (MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) {
-        (((&*v >> 8) as u8).into(), ((&*v & u8::MAX as u16) as u8).into())
-    }
-    fn join(hi: MaybeBorrowed<Self::High>, lo: MaybeBorrowed<Self::Low>) -> Self {
-        (*hi as u16) << 8 | *lo as u16
-    }
-}
-
-impl VebKey for i16 {
-    type High = i8;
-    type Low = i8;
-    fn split(v: MaybeBorrowed<Self>) -> (MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) {
-        (((&*v >> 8) as i8).into(), ((&*v & i8::MAX as i16) as i8).into())
-    }
-    fn join(hi: MaybeBorrowed<Self::High>, lo: MaybeBorrowed<Self::Low>) -> Self {
-        (*hi as i16) << 8 | *lo as i16
-    }
-}
-
-impl VebKey for u8 {
-    type High = U4;
-    type Low = U4;
-    fn split(v: MaybeBorrowed<Self>) -> (MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) {
-        (U4(&*v >> 4).into(), U4(&*v & U4::MAX).into())
-    }
-    fn join(hi: MaybeBorrowed<Self::High>, lo: MaybeBorrowed<Self::Low>) -> Self {
-        (hi.0 << 4 | lo.0)
-    }
-}
-
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct U4(pub u8);
 
@@ -374,6 +289,3 @@ impl U4 {
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct U2(pub u8);
-
-
-*/
