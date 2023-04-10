@@ -227,13 +227,8 @@ where
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {
         let data = match self.data.as_ref() {
-            None => {
-                if *k.borrow() <= self.min.0 {
-                    return None;
-                } else {
-                    return Some((MaybeBorrowed::Borrowed(&self.min.0), &self.min.1));
-                }
-            }
+            None if *k.borrow() <= self.min.0 => return None,
+            None => return Some((MaybeBorrowed::Borrowed(&self.min.0), &self.min.1)),
             Some(data) => data,
         };
 
@@ -256,12 +251,9 @@ where
                     val,
                 ));
             }
+            (Ordering::Less, _) if *k.borrow() <= self.min.0 => return None,
             (Ordering::Less, None) => {
-                if *k.borrow() <= self.min.0 {
-                    return None;
-                } else {
-                    return Some((MaybeBorrowed::Borrowed(&self.min.0), &self.min.1));
-                }
+                return Some((MaybeBorrowed::Borrowed(&self.min.0), &self.min.1));
             }
             (Ordering::Less, Some((summary, children))) => (summary, children),
         };
@@ -269,23 +261,26 @@ where
         let (high, low) = K::split(k);
 
         // Try to find the child where `k` is expected to live (identified by `high`)
-        // Then ask that node for the successor to `low`. This is expected to short circuit if `low` is outside the range of `child`
+        // Then ask that node for the predecessor to `low`. This is expected to short circuit if `low` is outside the range of `child`
         let low = children
             .get(high.borrow())
             .and_then(|child| child.predecessor(low));
-        Some(match low {
-            Some((low, val)) => (MaybeBorrowed::Owned(K::join(high, low.into().0)), val),
-            // If we didn't find it, find the successor to `high` in the summary and use the `min` of that node
-            None => {
-                let (high, ()) = summary.predecessor(high).unwrap();
-                let child = children.get(high.borrow()).unwrap();
-                let (low, val) = child.max_val();
-                (
-                    MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
-                    val,
-                )
-            }
-        })
+        if let Some((low, val)) = low {
+            return Some((MaybeBorrowed::Owned(K::join(high, low.into().0)), val));
+        }
+
+        // If we didn't find it, find the predecessor to `high` in the summary and use the `min` of that node
+        if let Some((high, ())) = summary.predecessor(high) {
+            let child = children.get(high.borrow()).unwrap();
+            let (low, val) = child.max_val();
+            return Some((
+                MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
+                val,
+            ));
+        }
+
+        // If there are no predecessor to `high`, then use the max value for this node
+        Some((MaybeBorrowed::Borrowed(&self.min.0), &self.min.1))
     }
 
     /// O(lg lg K)
@@ -294,13 +289,8 @@ where
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {
         let data = match self.data.as_mut() {
-            None => {
-                if *k.borrow() <= self.min.0 {
-                    return None;
-                } else {
-                    return Some((MaybeBorrowed::Borrowed(&self.min.0), &mut self.min.1));
-                }
-            }
+            None if *k.borrow() <= self.min.0 => return None,
+            None => return Some((MaybeBorrowed::Borrowed(&self.min.0), &mut self.min.1)),
             Some(data) => data,
         };
 
@@ -323,12 +313,9 @@ where
                     val,
                 ));
             }
+            (Ordering::Less, _) if *k.borrow() <= self.min.0 => return None,
             (Ordering::Less, None) => {
-                if *k.borrow() <= self.min.0 {
-                    return None;
-                } else {
-                    return Some((MaybeBorrowed::Borrowed(&self.min.0), &mut self.min.1));
-                }
+                return Some((MaybeBorrowed::Borrowed(&self.min.0), &mut self.min.1));
             }
             (Ordering::Less, Some((summary, children))) => (summary, children),
         };
@@ -336,7 +323,7 @@ where
         let (high, low) = K::split(k);
 
         // Try to find the child where `k` is expected to live (identified by `high`)
-        // Then ask that node for the successor to `low`. This is expected to short circuit if `low` is outside the range of `child`
+        // Then ask that node for the predecessor to `low`. This is expected to short circuit if `low` is outside the range of `child`
         {
             // FIXME: rust-lang/rust#106116
             // Remove this when core::ptr::from_mut is stabilized
@@ -355,14 +342,18 @@ where
             }
         }
 
-        // If we didn't find it, find the successor to `high` in the summary and use the `min` of that node
-        let (high, ()) = summary.predecessor(high).unwrap();
-        let child = children.get_mut(high.borrow()).unwrap();
-        let (low, val) = child.max_val_mut();
-        Some((
-            MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
-            val,
-        ))
+        // If we didn't find it, find the predecessor to `high` in the summary and use the `min` of that node
+        if let Some((high, ())) = summary.predecessor(high) {
+            let child = children.get_mut(high.borrow()).unwrap();
+            let (low, val) = child.max_val_mut();
+            return Some((
+                MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
+                val,
+            ));
+        }
+
+        // If there are no predecessor to `high`, then use the max value for this node
+        Some((MaybeBorrowed::Borrowed(&self.min.0), &mut self.min.1))
     }
 
     /// O(lg lg K)
@@ -370,7 +361,7 @@ where
     where
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {
-        let (summary, children) = match (k.borrow().cmp(&self.min.0), self.data.as_ref()) {
+        let (max, summary, children) = match (k.borrow().cmp(&self.min.0), self.data.as_ref()) {
             (Ordering::Less, _) => {
                 return Some((MaybeBorrowed::Borrowed(&self.min.0), &self.min.1))
             }
@@ -412,10 +403,10 @@ where
             (
                 _,
                 Some(TreeData {
-                    max: _,
+                    max,
                     children: Some((summary, children)),
                 }),
-            ) => (summary, children),
+            ) => (max, summary, children),
         };
 
         let (high, low) = K::split(k);
@@ -425,19 +416,22 @@ where
         let low = children
             .get(high.borrow())
             .and_then(|child| child.successor(low));
-        Some(match low {
-            Some((low, val)) => (MaybeBorrowed::Owned(K::join(high, low.into().0)), val),
-            // If we didn't find it, find the successor to `high` in the summary and use the `min` of that node
-            None => {
-                let (high, ()) = summary.successor(high).unwrap();
-                let child = children.get(high.borrow()).unwrap();
-                let (low, val) = child.min_val();
-                (
-                    MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
-                    val,
-                )
-            }
-        })
+        if let Some((low, val)) = low {
+            return Some((MaybeBorrowed::Owned(K::join(high, low.into().0)), val));
+        }
+
+        // If we didn't find it, find the successor to `high` in the summary and use the `min` of that node
+        if let Some((high, ())) = summary.successor(high) {
+            let child = children.get(high.borrow()).unwrap();
+            let (low, val) = child.min_val();
+            return Some((
+                MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
+                val,
+            ));
+        }
+
+        // If there are no successors to `high`, then use the max value for this node
+        Some((MaybeBorrowed::Borrowed(&max.0), &max.1))
     }
 
     /// O(lg lg K)
@@ -445,7 +439,7 @@ where
     where
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {
-        let (summary, children) = match (k.borrow().cmp(&self.min.0), self.data.as_mut()) {
+        let (max, summary, children) = match (k.borrow().cmp(&self.min.0), self.data.as_mut()) {
             (Ordering::Less, _) => {
                 return Some((MaybeBorrowed::Borrowed(&self.min.0), &mut self.min.1))
             }
@@ -487,10 +481,10 @@ where
             (
                 _,
                 Some(TreeData {
-                    max: _,
+                    max,
                     children: Some((summary, children)),
                 }),
-            ) => (summary, children),
+            ) => (max, summary, children),
         };
 
         let (high, low) = K::split(k);
@@ -515,14 +509,19 @@ where
             }
             drop(low)
         }
+
         // If we didn't find it, find the successor to `high` in the summary and use the `min` of that node
-        let (high, ()) = summary.successor(high).unwrap();
-        let child = children.get_mut(high.borrow()).unwrap();
-        let (low, val) = child.min_val_mut();
-        Some((
-            MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
-            val,
-        ))
+        if let Some((high, ())) = summary.successor(high) {
+            let child = children.get_mut(high.borrow()).unwrap();
+            let (low, val) = child.min_val_mut();
+            return Some((
+                MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
+                val,
+            ));
+        }
+
+        // If there are no successors to `high`, then use the max value for this node
+        Some((MaybeBorrowed::Borrowed(&max.0), &mut max.1))
     }
 
     /// O(lg lg K)
@@ -560,7 +559,7 @@ where
 
                 (K::split(k), v, data)
             }
-            (Ordering::Greater, Some(data)) => match data.max.0.cmp(k.borrow()) {
+            (Ordering::Greater, Some(data)) => match k.borrow().cmp(&data.max.0) {
                 Ordering::Equal => return Some(replace(&mut data.max, (k.into().0, v))),
                 Ordering::Greater => {
                     let (k, v) = replace(&mut data.max, (k.into().0, v));
@@ -784,49 +783,190 @@ where
 
 #[cfg(test)]
 mod test {
+    use core::fmt;
+
     use crate::{hash::HashMapMarker, key::MaybeBorrowed, VebTree};
 
     use super::Tree;
+
+    fn verify<K, V, T>(
+        veb: &mut T,
+        entry: fn(&K) -> T::EntryKey<'_>,
+        finds: impl IntoIterator<Item = (K, Option<(K, V)>)>,
+        predecessors: impl IntoIterator<Item = (K, Option<(K, V)>)>,
+        successors: impl IntoIterator<Item = (K, Option<(K, V)>)>,
+    ) where
+        K: fmt::Debug + Clone,
+        V: fmt::Debug + PartialEq,
+        T: VebTree<Key = K, Value = V>,
+        for<'a> T::EntryKey<'a>: fmt::Debug + PartialEq,
+    {
+        for (i, mut r) in finds {
+            assert_eq!(
+                veb.find(i.clone()),
+                r.as_ref().map(|(k, v)| (entry(k), v)),
+                "find {i:?}"
+            );
+            assert_eq!(
+                veb.find_mut(i.clone()),
+                r.as_mut().map(|(k, v)| (entry(k), v)),
+                "find_mut {i:?}"
+            );
+        }
+        for (i, mut r) in predecessors {
+            assert_eq!(
+                veb.predecessor(i.clone()),
+                r.as_ref().map(|(k, v)| (entry(k), v)),
+                "predecessor {i:?}"
+            );
+            assert_eq!(
+                veb.predecessor_mut(i.clone()),
+                r.as_mut().map(|(k, v)| (entry(k), v)),
+                "predecessor_mut {i:?}"
+            );
+        }
+        for (i, mut r) in successors {
+            assert_eq!(
+                veb.successor(i.clone()),
+                r.as_ref().map(|(k, v)| (entry(k), v)),
+                "successor {i:?}"
+            );
+            assert_eq!(
+                veb.successor_mut(i.clone()),
+                r.as_mut().map(|(k, v)| (entry(k), v)),
+                "successor_mut {i:?}"
+            );
+        }
+    }
 
     #[test]
     fn simple() {
         //VebTree
         type U16Tree = Tree<
-            u16,
-            (),
+            u16,           // Key
+            &'static str,  // Value
             HashMapMarker, // Summary
             // Children
             HashMapMarker<
                 HashMapMarker, // Child "tree"
             >,
         >;
-        let mut v = U16Tree::from_monad(10, ());
+        fn entry<'a>(v: &'a u16) -> MaybeBorrowed<'a, u16> {
+            MaybeBorrowed::Borrowed(v)
+        }
+        let mut v = U16Tree::from_monad(10, "a");
 
-        assert_eq!(v.find(10), Some((MaybeBorrowed::Owned(10), &())));
-        assert_eq!(v.find(13), None);
-        assert_eq!(v.min_val(), (&10, &()));
-        assert_eq!(v.max_val(), (&10, &()));
-        assert_eq!(v.predecessor(9), None);
-        assert_eq!(v.predecessor(10), None);
-        assert_eq!(v.predecessor(13), Some((MaybeBorrowed::Owned(10), &())));
-        assert_eq!(v.predecessor(14), Some((MaybeBorrowed::Owned(10), &())));
-        assert_eq!(v.successor(9), Some((MaybeBorrowed::Owned(10), &())));
-        assert_eq!(v.successor(10), None);
-        assert_eq!(v.successor(13), None);
-        assert_eq!(v.successor(14), None);
+        assert_eq!(v.min_val(), (&10, &"a"));
+        assert_eq!(v.max_val(), (&10, &"a"));
+        verify::<_, _, U16Tree>(
+            &mut v,
+            entry,
+            [
+                (9, None),
+                (10, Some((10, "a"))),
+                (11, None),
+                (12, None),
+                (13, None),
+                (14, None),
+                (15, None),
+                (16, None),
+            ],
+            [
+                (9, None),
+                (10, None),
+                (11, Some((10, "a"))),
+                (12, Some((10, "a"))),
+                (13, Some((10, "a"))),
+                (14, Some((10, "a"))),
+                (15, Some((10, "a"))),
+                (16, Some((10, "a"))),
+            ],
+            [
+                (9, Some((10, "a"))),
+                (10, None),
+                (11, None),
+                (12, None),
+                (13, None),
+                (14, None),
+                (15, None),
+                (16, None),
+            ],
+        );
 
-        v.insert(13, ());
-        assert_eq!(v.find(10), Some((MaybeBorrowed::Owned(10), &())));
-        assert_eq!(v.find(13), Some((MaybeBorrowed::Owned(13), &())));
-        assert_eq!(v.min_val(), (&10, &()));
-        assert_eq!(v.max_val(), (&13, &()));
-        assert_eq!(v.predecessor(9), None);
-        assert_eq!(v.predecessor(10), None);
-        assert_eq!(v.predecessor(13), Some((MaybeBorrowed::Owned(10), &())));
-        assert_eq!(v.predecessor(14), Some((MaybeBorrowed::Owned(13), &())));
-        assert_eq!(v.successor(9), Some((MaybeBorrowed::Owned(10), &())));
-        assert_eq!(v.successor(10), Some((MaybeBorrowed::Owned(13), &())));
-        assert_eq!(v.successor(13), None);
-        assert_eq!(v.successor(14), None);
+        v.insert(15, "b");
+        assert_eq!(v.min_val(), (&10, &"a"));
+        assert_eq!(v.max_val(), (&15, &"b"));
+        verify::<_, _, U16Tree>(
+            &mut v,
+            entry,
+            [
+                (9, None),
+                (10, Some((10, "a"))),
+                (11, None),
+                (12, None),
+                (13, None),
+                (14, None),
+                (15, Some((15, "b"))),
+                (16, None),
+            ],
+            [
+                (9, None),
+                (10, None),
+                (11, Some((10, "a"))),
+                (12, Some((10, "a"))),
+                (13, Some((10, "a"))),
+                (14, Some((10, "a"))),
+                (15, Some((10, "a"))),
+                (16, Some((15, "b"))),
+            ],
+            [
+                (9, Some((10, "a"))),
+                (10, Some((15, "b"))),
+                (11, Some((15, "b"))),
+                (12, Some((15, "b"))),
+                (13, Some((15, "b"))),
+                (14, Some((15, "b"))),
+                (15, None),
+                (16, None),
+            ],
+        );
+
+        v.insert(13, "c");
+        assert_eq!(v.min_val(), (&10, &"a"));
+        assert_eq!(v.max_val(), (&15, &"b"));
+        verify::<_, _, U16Tree>(
+            &mut v,
+            entry,
+            [
+                (9, None),
+                (10, Some((10, "a"))),
+                (11, None),
+                (12, None),
+                (13, Some((13, "c"))),
+                (14, None),
+                (15, Some((15, "b"))),
+                (16, None),
+            ],
+            [
+                (9, None),
+                (10, None),
+                (11, Some((10, "a"))),
+                (12, Some((10, "a"))),
+                (13, Some((10, "a"))),
+                (14, Some((13, "c"))),
+                (15, Some((13, "c"))),
+                (16, Some((15, "b"))),
+            ],
+            [
+                (9, Some((10, "a"))),
+                (10, Some((13, "c"))),
+                (11, Some((13, "c"))),
+                (12, Some((13, "c"))),
+                (13, Some((15, "b"))),
+                (14, Some((15, "b"))),
+                (15, None),
+                (16, None),
+            ],
+        );
     }
 }

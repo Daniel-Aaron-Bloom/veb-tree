@@ -151,7 +151,10 @@ where
     }
 
     fn create(h: &Self::High, tree: Self::Tree) -> Self {
-        HashMap::from_iter([(h.clone(), tree)])
+        let v = HashMap::from_iter([(h.clone(), tree)]);
+        debug_assert_eq!(v.len(), 1);
+        debug_assert!(v.contains_key(h));
+        v
     }
 
     fn get(&self, h: &Self::High) -> Option<&Self::Tree> {

@@ -1,4 +1,8 @@
-use core::{ops::Deref, borrow::Borrow, ops::{Shl, Shr, BitOr}};
+use core::{
+    borrow::Borrow,
+    ops::Deref,
+    ops::{BitOr, Shl, Shr},
+};
 
 pub struct Owned<T>(pub T);
 
