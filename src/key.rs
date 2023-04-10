@@ -1,5 +1,4 @@
-use core::ops::Deref;
-use std::borrow::Borrow;
+use core::{ops::Deref, borrow::Borrow, ops::{Shl, Shr, BitOr}};
 
 pub struct Owned<T>(pub T);
 
@@ -127,10 +126,7 @@ impl VebKey for u128 {
         Self: 'a,
     {
         let Owned(v) = v.into();
-        (
-            ((v >> 64) as u64).into(),
-            ((v & u64::MAX as u128) as u64).into(),
-        )
+        ((v >> 64) as u64, v as u64)
     }
     fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
         (hi as u128) << 64 | lo as u128
@@ -169,10 +165,7 @@ impl VebKey for u64 {
         Self: 'a,
     {
         let Owned(v) = v.into();
-        (
-            ((v >> 32) as u32).into(),
-            ((v & u32::MAX as u64) as u32).into(),
-        )
+        ((v >> 32) as u32, v as u32)
     }
     fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
         (hi as u64) << 32 | lo as u64
@@ -211,10 +204,7 @@ impl VebKey for u32 {
         Self: 'a,
     {
         let Owned(v) = v.into();
-        (
-            ((v >> 16) as u16).into(),
-            ((v & u16::MAX as u32) as u16).into(),
-        )
+        ((v >> 16) as u16, v as u16)
     }
     fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
         (hi as u32) << 16 | lo as u32
@@ -253,7 +243,7 @@ impl VebKey for u16 {
         Self: 'a,
     {
         let Owned(v) = v.into();
-        (((v >> 8) as u8).into(), ((v & u8::MAX as u16) as u8).into())
+        ((v >> 8) as u8, v as u8)
     }
     fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
         (hi as u16) << 8 | lo as u16
@@ -280,6 +270,45 @@ impl VebKey for i16 {
     }
 }
 
+impl VebKey for u8 {
+    type High = U4;
+    type Low = U4;
+    type HValue<'a> = U4;
+    type LValue<'a> = U4;
+    fn split<'a>(
+        v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
+    ) -> (Self::HValue<'a>, Self::LValue<'a>)
+    where
+        Self: 'a,
+    {
+        let Owned(v) = v.into();
+        ((v >> 4).into(), v.into())
+    }
+    fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
+        u8::from(hi) << 4 | u8::from(lo)
+    }
+}
+
+impl VebKey for i8 {
+    type High = I4;
+    type Low = I4;
+    type HValue<'a> = I4;
+    type LValue<'a> = I4;
+    fn split<'a>(
+        v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
+    ) -> (Self::HValue<'a>, Self::LValue<'a>)
+    where
+        Self: 'a,
+    {
+        let Owned(v) = v.into();
+        let (lo, hi) = u8::split(v as u8);
+        (lo.into(), hi.into())
+    }
+    fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
+        u8::join(hi.into(), lo.into()) as i8
+    }
+}
+
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct U4(pub u8);
 
@@ -287,5 +316,168 @@ impl U4 {
     pub const MAX: u8 = u8::MAX >> 4;
 }
 
+impl From<u8> for U4 {
+    fn from(value: u8) -> Self {
+        Self(value & Self::MAX)
+    }
+}
+impl From<U4> for u8 {
+    fn from(value: U4) -> Self {
+        value.0
+    }
+}
+
+impl BitOr for U4 {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self::from(self.0 | rhs.0)
+    }
+}
+
+impl Shl<usize> for U4 {
+    type Output = Self;
+    fn shl(self, rhs: usize) -> Self::Output {
+        Self::from(self.0.shl(rhs))
+    }
+}
+
+impl Shr<usize> for U4 {
+    type Output = Self;
+    fn shr(self, rhs: usize) -> Self::Output {
+        Self::from(self.0.shr(rhs))
+    }
+}
+
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
+pub struct I4(pub i8);
+
+impl From<U4> for I4 {
+    fn from(value: U4) -> Self {
+        Self(value.0 as i8)
+    }
+}
+impl From<I4> for U4 {
+    fn from(value: I4) -> Self {
+        Self(value.0 as u8)
+    }
+}
+
+impl VebKey for U4 {
+    type High = U2;
+    type Low = U2;
+    type HValue<'a> = U2;
+    type LValue<'a> = U2;
+    fn split<'a>(
+        v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
+    ) -> (Self::HValue<'a>, Self::LValue<'a>)
+    where
+        Self: 'a,
+    {
+        let Owned(v) = v.into();
+        ((v >> 2).into(), v.into())
+    }
+    fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
+        U4::from(hi) << 2 | U4::from(lo)
+    }
+}
+
+impl VebKey for I4 {
+    type High = I2;
+    type Low = I2;
+    type HValue<'a> = I2;
+    type LValue<'a> = I2;
+    fn split<'a>(
+        v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
+    ) -> (Self::HValue<'a>, Self::LValue<'a>)
+    where
+        Self: 'a,
+    {
+        let Owned(v) = v.into();
+        let (lo, hi) = U4::split(U4::from(v));
+        (lo.into(), hi.into())
+    }
+    fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
+        I4::from(U4::join(hi.into(), lo.into()))
+    }
+}
+
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct U2(pub u8);
+
+impl U2 {
+    pub const MAX: u8 = u8::MAX >> 6;
+}
+impl From<u8> for U2 {
+    fn from(value: u8) -> Self {
+        Self(value & Self::MAX)
+    }
+}
+impl From<U4> for U2 {
+    fn from(value: U4) -> Self {
+        Self::from(value.0)
+    }
+}
+impl From<U2> for U4 {
+    fn from(value: U2) -> Self {
+        Self(value.0)
+    }
+}
+impl From<U2> for bool {
+    fn from(value: U2) -> Self {
+        value.0 & 1 == 1
+    }
+}
+
+impl BitOr for U2 {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self::from(self.0 | rhs.0)
+    }
+}
+
+impl Shl<usize> for U2 {
+    type Output = Self;
+    fn shl(self, rhs: usize) -> Self::Output {
+        Self::from(self.0.shl(rhs))
+    }
+}
+
+impl Shr<usize> for U2 {
+    type Output = Self;
+    fn shr(self, rhs: usize) -> Self::Output {
+        Self::from(self.0.shr(rhs))
+    }
+}
+
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
+pub struct I2(pub i8);
+
+impl From<U2> for I2 {
+    fn from(value: U2) -> Self {
+        Self(value.0 as i8)
+    }
+}
+impl From<I2> for U2 {
+    fn from(value: I2) -> Self {
+        Self(value.0 as u8)
+    }
+}
+
+impl VebKey for U2 {
+    type High = bool;
+    type Low = bool;
+    type HValue<'a> = bool;
+    type LValue<'a> = bool;
+    fn split<'a>(
+        v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
+    ) -> (Self::HValue<'a>, Self::LValue<'a>)
+    where
+        Self: 'a,
+    {
+        let Owned(v) = v.into();
+        (v >> 1 == U2::from(1), v.into())
+    }
+    fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
+        U2::from(hi as u8) << 2 | U2::from(lo as u8)
+    }
+}
