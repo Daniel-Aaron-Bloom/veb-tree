@@ -805,7 +805,7 @@ where
 mod test {
     use core::fmt;
 
-    use crate::{hash::HashMapMarker, key::MaybeBorrowed, RemoveResult, VebTree};
+    use crate::{hash::HashMapMarker, key::MaybeBorrowed, RemoveResult, VebTree, bitset::BitSetMarker};
 
     use super::Tree;
 
@@ -865,7 +865,7 @@ mod test {
         type U16Tree = Tree<
             u16,           // Key
             &'static str,  // Value
-            HashMapMarker, // Summary
+            BitSetMarker,  // Summary
             // Children
             HashMapMarker<
                 HashMapMarker, // Child "tree"
