@@ -25,7 +25,7 @@ impl ByteSet {
         v.into_iter().map(u128::count_ones).sum::<u32>() as usize
     }
     fn from_array(v: [u128; 2]) -> Option<Self> {
-        if v == [0,0] {
+        if v == [0, 0] {
             None
         } else {
             Some(Self(v, ()))
@@ -58,7 +58,7 @@ impl ByteSet {
         if o {
             k[1] -= 1;
         }
-        k    
+        k
     }
     /// Create a mask for the bits under bit i
     fn mask_higher(i: u8) -> [u128; 2] {
@@ -69,7 +69,6 @@ impl ByteSet {
                 .unwrap_or_default(),
         ]
     }
-
 }
 
 impl BitOr<u8> for ByteSet {
@@ -287,13 +286,13 @@ impl<L: TreeList> TreeCollection for ByteMap<L> {
     fn create(h: &u8, tree: Self::Tree) -> Self {
         Self {
             set: ByteSet::from_monad(*h, ()),
-            list: L::from_monad(tree)
+            list: L::from_monad(tree),
         }
     }
 
     fn get(&self, h: &u8) -> Option<&Self::Tree> {
         if !(self.set & *h) {
-            return None
+            return None;
         }
         let mut v = ByteSet::mask_lower(*h);
         v &= self.set;
@@ -301,7 +300,7 @@ impl<L: TreeList> TreeCollection for ByteMap<L> {
     }
     fn get_mut(&mut self, h: &u8) -> Option<&mut Self::Tree> {
         if !(self.set & *h) {
-            return None
+            return None;
         }
         let mut v = ByteSet::mask_lower(*h);
         v &= self.set;
@@ -317,7 +316,7 @@ impl<L: TreeList> TreeCollection for ByteMap<L> {
         let index = ByteSet::array_len(v);
 
         if self.set & *key.borrow() {
-            Entry::Occupied(Occupied{
+            Entry::Occupied(Occupied {
                 key,
                 list: &mut self.list,
                 index,
@@ -327,7 +326,7 @@ impl<L: TreeList> TreeCollection for ByteMap<L> {
         }
     }
 
-    fn deref<'a, 'b, Q>(v: &'a mut Occupied<'b, Q, L>) -> (&'a mut u8, &'a mut Self::Tree) {
+    fn deref<'a, 'b, Q>(v: &'a mut Occupied<'b, Q, L>) -> &'a mut Self::Tree {
         todo!()
     }
 
@@ -380,7 +379,7 @@ mod test {
             assert_eq!(set.predecessor(i), Some((i - 1, &())));
             set |= i;
             if i > 1 {
-                assert_eq!(set.successor(0), Some((i-1, &())));
+                assert_eq!(set.successor(0), Some((i - 1, &())));
             }
             assert_eq!(set.successor(i - 1), Some((i, &())));
             assert_eq!(set.highest(), i);

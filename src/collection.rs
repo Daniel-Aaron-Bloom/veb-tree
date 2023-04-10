@@ -76,7 +76,6 @@ pub trait TreeCollection {
     where
         Self: 'a;
 
-
     /// Construct a collection from a single entry
     fn create(h: &Self::High, tree: Self::Tree) -> Self;
 
@@ -94,9 +93,7 @@ pub trait TreeCollection {
         Q: Borrow<Self::High>;
 
     /// Dereference an occupied entry
-    fn deref<'a, 'b, Q>(
-        v: &'a mut Self::Occupied<'b, Q>,
-    ) -> (&'a mut Self::High, &'a mut Self::Tree);
+    fn deref<'a, 'b, Q>(v: &'a mut Self::Occupied<'b, Q>) -> &'a mut Self::Tree;
 
     /// Decompose an occupied entry
     fn decompose<'a, Q>(v: Self::Occupied<'a, Q>) -> (Q, &'a mut Self::Tree);
@@ -137,7 +134,7 @@ where
         let v = HashMap::from_iter([(h.clone(), tree)]);
         debug_assert_eq!(v.len(), 1);
         debug_assert!(v.contains_key(h));
-        
+
         v
     }
 
@@ -157,10 +154,8 @@ where
         }
     }
 
-    fn deref<'a, 'b, Q>(
-        v: &'a mut Self::Occupied<'b, Q>,
-    ) -> (&'a mut Self::High, &'a mut Self::Tree) {
-        v.entry.get_key_value_mut()
+    fn deref<'a, 'b, Q>(v: &'a mut Self::Occupied<'b, Q>) -> &'a mut Self::Tree {
+        v.entry.get_mut()
     }
 
     fn decompose<'a, Q>(v: Self::Occupied<'a, Q>) -> (Q, &'a mut Self::Tree) {

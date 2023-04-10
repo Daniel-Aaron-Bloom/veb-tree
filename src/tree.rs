@@ -638,7 +638,6 @@ where
                 };
                 // Try to remove the smallest entry from the subtree
                 let (low, val, empty) = TC::<Children, K, V>::deref(&mut child)
-                    .1
                     .remove_max()
                     .map(|(low, val)| (low, val, false))
                     // Or remove the subtree entirely if it's a monad
@@ -673,7 +672,7 @@ where
                             Entry::Vacant(_) => break (RemoveResult::NotPresent, false),
                         };
 
-                        match TC::<Children, K, V>::deref(&mut child).1.remove(low) {
+                        match TC::<Children, K, V>::deref(&mut child).remove(low) {
                             RemoveResult::NotPresent => break (RemoveResult::NotPresent, false),
                             RemoveResult::Monad => {
                                 let result = TC::<Children, K, V>::remove(child);
@@ -728,7 +727,6 @@ where
                 };
                 // Try to remove the smallest entry from the subtree
                 let (low, val, empty) = TC::<Children, K, V>::deref(&mut child)
-                    .1
                     .remove_min()
                     .map(|(low, val)| (low, val, false))
                     // Or remove the subtree entirely if it's a monad
@@ -776,7 +774,6 @@ where
                 };
                 // Try to remove the smallest entry from the subtree
                 let (low, val, empty) = TC::<Children, K, V>::deref(&mut child)
-                    .1
                     .remove_max()
                     .map(|(low, val)| (low, val, false))
                     // Or remove the subtree entirely if it's a monad
