@@ -1,18 +1,16 @@
 use core::{
-    ops::{BitOr, BitOrAssign, BitAnd, BitXor, BitXorAssign},
-    borrow::Borrow
+    borrow::Borrow,
+    ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign},
 };
-use std::ops::BitAndAssign;
 
-use crate::{VebTree, key::Owned, RemoveResult, tree::VebTreeMarker};
-
+use crate::{key::Owned, tree::VebTreeMarker, RemoveResult, VebTree};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BitSet([u128; 2], ());
 
 pub struct BitSetMarker;
 
-impl VebTreeMarker<u8, ()> for BitSetMarker{
+impl VebTreeMarker<u8, ()> for BitSetMarker {
     type Tree = BitSet;
 }
 
@@ -179,10 +177,15 @@ impl VebTree for BitSet {
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {
         let k = k.into().0;
-        let mut k = Self([
-            u128::MAX.checked_shl(1 + k as u32).unwrap_or_default(),
-            u128::MAX.checked_shl(k.saturating_sub(127) as u32).unwrap_or_default(),
-        ], ());
+        let mut k = Self(
+            [
+                u128::MAX.checked_shl(1 + k as u32).unwrap_or_default(),
+                u128::MAX
+                    .checked_shl(k.saturating_sub(127) as u32)
+                    .unwrap_or_default(),
+            ],
+            (),
+        );
         k &= *self;
 
         if k.len() == 0 {
@@ -196,10 +199,15 @@ impl VebTree for BitSet {
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {
         let k = k.into().0;
-        let mut k = Self([
-            u128::MAX.checked_shl(1 + k as u32).unwrap_or_default(),
-            u128::MAX.checked_shl(k.saturating_sub(127) as u32).unwrap_or_default(),
-        ], ());
+        let mut k = Self(
+            [
+                u128::MAX.checked_shl(1 + k as u32).unwrap_or_default(),
+                u128::MAX
+                    .checked_shl(k.saturating_sub(127) as u32)
+                    .unwrap_or_default(),
+            ],
+            (),
+        );
         k &= *self;
 
         if k.len() == 0 {
@@ -265,25 +273,25 @@ mod test {
         let mut set = BitSet::from_monad(0, ());
         for i in 1..=255u8 {
             assert_eq!(set.lowest(), 0);
-            assert_eq!(set.highest(), i-1);
-            assert_eq!(set.predecessor(i), Some((i-1, &())));
+            assert_eq!(set.highest(), i - 1);
+            assert_eq!(set.predecessor(i), Some((i - 1, &())));
             set |= i;
-            assert_eq!(set.successor(i-1), Some((i, &())));
-            assert_eq!(set.predecessor(i), Some((i-1, &())));
+            assert_eq!(set.successor(i - 1), Some((i, &())));
+            assert_eq!(set.predecessor(i), Some((i - 1, &())));
         }
         assert_eq!(set.highest(), 255);
-        
+
         let mut set = BitSet::from_monad(0, ());
         for i in 1..=255u8 {
-            assert_eq!(set.successor(i-1), None);
-            assert_eq!(set.lowest(), i-1);
-            assert_eq!(set.highest(), i-1);
-            assert_eq!(set.predecessor(i-1), None);
-            assert_eq!(set.predecessor(i), Some((i-1, &())));
+            assert_eq!(set.successor(i - 1), None);
+            assert_eq!(set.lowest(), i - 1);
+            assert_eq!(set.highest(), i - 1);
+            assert_eq!(set.predecessor(i - 1), None);
+            assert_eq!(set.predecessor(i), Some((i - 1, &())));
             set |= i;
-            assert_eq!(set.successor(i-1), Some((i, &())));
+            assert_eq!(set.successor(i - 1), Some((i, &())));
             assert_eq!(set.highest(), i);
-            set ^= i-1;
+            set ^= i - 1;
         }
         assert_eq!(set.lowest(), 255);
         assert_eq!(set.highest(), 255);

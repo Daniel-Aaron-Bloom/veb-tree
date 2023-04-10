@@ -1,10 +1,12 @@
+#![no_std]
+
 use core::borrow::Borrow;
 
+pub mod bitset;
 pub mod collection;
+pub mod hash;
 pub mod key;
 pub mod tree;
-pub mod hash;
-pub mod bitset;
 
 use key::Owned;
 
