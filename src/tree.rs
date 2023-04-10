@@ -569,8 +569,8 @@ where
             },
         };
 
-        if let Some((summary, children)) = &mut data.children {
-            match children.entry(high) {
+        if let Some((mut summary, mut children)) = data.children.take() {
+            let r = match children.entry(high) {
                 Entry::Occupied(entry) => {
                     let (high, child) = TC::<Children, K, V>::decompose(entry);
                     child
@@ -582,7 +582,9 @@ where
                     TC::<Children, K, V>::insert(entry, VebTree::from_monad(low.into().0, v));
                     None
                 }
-            }
+            };
+            data.children = Some((summary, children));
+            r
         } else {
             let children =
                 TC::<Children, K, V>::create(high.borrow(), VebTree::from_monad(low.into().0, v));
