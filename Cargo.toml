@@ -10,6 +10,7 @@ hashbrown = "0.13"
 [dev-dependencies]
 criterion = "0.4"
 rand = "0.8"
+pprof = { version = "0.11", features = ["flamegraph"] }
 
 [[bench]]
 name = "random"
@@ -17,3 +18,6 @@ harness = false
 
 [lib]
 bench = false
+
+[profile.bench]
+debug = true

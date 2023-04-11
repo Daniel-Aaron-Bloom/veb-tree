@@ -201,5 +201,12 @@ fn criterion_benchmark(c: &mut Criterion) {
     );
 }
 
-criterion_group!(benches, criterion_benchmark);
+mod perf;
+
+criterion_group! {
+    name = benches;
+    // This can be any expression that returns a `Criterion` object.
+    config = Criterion::default().with_profiler(perf::FlamegraphProfiler::new(100));
+    targets = criterion_benchmark
+}
 criterion_main!(benches);

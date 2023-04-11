@@ -28,9 +28,11 @@ impl VebTreeMarker<u8, ()> for ByteSetMarker {
 }
 
 impl ByteSet {
+    #[inline(always)]
     fn array_len(v: [u128; 2]) -> usize {
-        v.into_iter().map(u128::count_ones).sum::<u32>() as usize
+        (v[0].count_ones() + v[1].count_ones()) as usize
     }
+    #[inline(always)]
     fn from_array(v: [u128; 2]) -> Option<Self> {
         if v == [0, 0] {
             None
@@ -38,9 +40,11 @@ impl ByteSet {
             Some(Self(v, ()))
         }
     }
+    #[inline(always)]
     pub fn len(&self) -> usize {
         Self::array_len(self.0)
     }
+    #[inline(always)]
     pub fn lowest(&self) -> u8 {
         (if self.0[0] == 0 {
             debug_assert_ne!(self.0[1], 0);
@@ -49,6 +53,7 @@ impl ByteSet {
             self.0[0].trailing_zeros()
         }) as u8
     }
+    #[inline(always)]
     pub fn highest(&self) -> u8 {
         (if self.0[1] == 0 {
             debug_assert_ne!(self.0[0], 0);
@@ -57,12 +62,14 @@ impl ByteSet {
             255 - self.0[1].leading_zeros()
         }) as u8
     }
+    #[inline(always)]
     fn count_below(&self, k: u8) -> usize {
         let mut mask = ByteSet::mask_lower(k);
         mask &= *self;
         Self::array_len(mask)
     }
     /// Create a mask for the bits under bit i
+    #[inline(always)]
     fn mask_lower(i: u8) -> [u128; 2] {
         let i = i as u32;
         [
@@ -75,6 +82,7 @@ impl ByteSet {
         ]
     }
     /// Create a mask for the bits under bit i
+    #[inline(always)]
     fn mask_higher(i: u8) -> [u128; 2] {
         [
             u128::MAX.checked_shl(1 + i as u32).unwrap_or_default(),
@@ -89,12 +97,14 @@ struct ByteSetKey(u8);
 
 impl Add<ByteSetKey> for ByteSet {
     type Output = Self;
+    #[inline(always)]
     fn add(mut self, rhs: ByteSetKey) -> Self::Output {
         self += rhs;
         self
     }
 }
 impl AddAssign<ByteSetKey> for ByteSet {
+    #[inline(always)]
     fn add_assign(&mut self, rhs: ByteSetKey) {
         self.0[rhs.0 as usize / 128] |= 1 << (rhs.0 % 128);
     }
@@ -102,12 +112,14 @@ impl AddAssign<ByteSetKey> for ByteSet {
 
 impl BitAnd<ByteSetKey> for ByteSet {
     type Output = bool;
+    #[inline(always)]
     fn bitand(self, rhs: ByteSetKey) -> Self::Output {
         self.0[rhs.0 as usize / 128] & 1 << (rhs.0 % 128) != 0
     }
 }
 
 impl BitAndAssign<ByteSet> for [u128; 2] {
+    #[inline(always)]
     fn bitand_assign(&mut self, rhs: ByteSet) {
         self[0] &= rhs.0[0];
         self[1] &= rhs.0[1];
@@ -116,12 +128,14 @@ impl BitAndAssign<ByteSet> for [u128; 2] {
 
 impl Sub<ByteSetKey> for ByteSet {
     type Output = Self;
+    #[inline(always)]
     fn sub(mut self, rhs: ByteSetKey) -> Self::Output {
         self -= rhs;
         self
     }
 }
 impl SubAssign<ByteSetKey> for ByteSet {
+    #[inline(always)]
     fn sub_assign(&mut self, rhs: ByteSetKey) {
         self.0[rhs.0 as usize / 128] &= !(1 << (rhs.0 % 128));
     }
@@ -433,9 +447,6 @@ impl<L: TreeList> TreeCollection for ByteMap<L> {
         h: Q,
         (l, v): CollectionKV<Self>,
     ) -> Result<Self::High, (Q, Option<CollectionKV<Self>>)> {
-        assert_eq!(self.set.len(), self.list.len(), "{:?}", &self.set);
-        let prev = (self.set.clone(), self.list.len());
-
         let k = *h.borrow();
         let i = self.set.count_below(k);
         let v = if let Some(_) = self.set.insert(k, ()) {
@@ -444,12 +455,6 @@ impl<L: TreeList> TreeCollection for ByteMap<L> {
             self.list.insert_tree(i, VebTree::from_monad(l, v));
             Ok(k)
         };
-        assert_eq!(
-            self.set.len(),
-            self.list.len(),
-            "{:?} (prev {prev:?})",
-            &self.set
-        );
         v
     }
     fn remove_key<'a, Q, R>(mut self, h: Q, r: R) -> TreeRemoveResult<Self>
@@ -461,19 +466,6 @@ impl<L: TreeList> TreeCollection for ByteMap<L> {
         debug_assert!(self.set.find(k).is_some());
         let i = self.set.count_below(k);
 
-        assert_eq!(self.set.len(), self.list.len(), "{:?}", &self.set);
-        let prev = (self.set.clone(), self.list.len());
-
-        if i >= self.list.len() {
-            assert!(
-                i < self.list.len(),
-                "{i} >= {} : {k} below {:?} (len {})",
-                self.list.len(),
-                &self.set,
-                self.set.len()
-            );
-        }
-
         match self.list.remove_key(i, r) {
             (None, v) => (None, v),
             (Some((list, removed)), v) => {
@@ -482,12 +474,6 @@ impl<L: TreeList> TreeCollection for ByteMap<L> {
                     debug_assert!(self.set & ByteSetKey(k));
                     self.set -= ByteSetKey(k);
                 }
-                assert_eq!(
-                    self.set.len(),
-                    self.list.len(),
-                    "{:?} {k}={removed} {prev:?}",
-                    &self.set
-                );
                 (Some((self, removed)), v)
             }
         }
@@ -504,20 +490,9 @@ impl<L: TreeList> TreeCollection for ByteMap<L> {
         }
         let i = self.set.count_below(k);
 
-        assert_eq!(self.set.len(), self.list.len(), "{:?}", &self.set);
-        let prev = (self.set.clone(), self.list.len());
-
-        assert!(
-            i < self.list.len(),
-            "{i} >= {} : {k} below {:?}",
-            self.list.len(),
-            &self.set
-        );
-
         match self.list.maybe_remove_key(i, r) {
             Err(list) => {
                 self.list = list;
-                assert_eq!(self.set.len(), self.list.len(), "{:?}", &self.set);
                 Err(self)
             }
             Ok((None, v)) => Ok((None, v)),
@@ -527,12 +502,6 @@ impl<L: TreeList> TreeCollection for ByteMap<L> {
                     debug_assert!(self.set & ByteSetKey(k));
                     self.set -= ByteSetKey(k);
                 }
-                assert_eq!(
-                    self.set.len(),
-                    self.list.len(),
-                    "{:?} {k}={removed} {prev:?}",
-                    &self.set
-                );
                 Ok((Some((self, removed)), v))
             }
         }
