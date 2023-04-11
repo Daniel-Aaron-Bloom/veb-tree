@@ -5,8 +5,8 @@ use core::{
 
 use hashbrown::HashMap;
 
-use crate::{key::Owned, VebTree};
-use crate::{key::VebKey, RemoveResult};
+use crate::{key::Owned, RemoveResult, TreeKV, VebTree};
+use crate::{key::VebKey, MaybeRemoveResult};
 
 /// A marker trait to help with associated type bounds
 pub trait SuperTreeCollection<K: VebKey, V> {
@@ -27,21 +27,9 @@ pub trait VebTreeCollectionMarker<K: VebKey, V> {
     type TreeCollection: SuperTreeCollection<K, V>;
 }
 
-pub type TreeRemoveResult<TC> = Result<
-    (
-        Option<TC>,
-        (
-            <<TC as TreeCollection>::Tree as VebTree>::Key,
-            <<TC as TreeCollection>::Tree as VebTree>::Value,
-        ),
-    ),
-    TC,
->;
-
-pub type TreeInsert<TC> = (
-    <<TC as TreeCollection>::Tree as VebTree>::Key,
-    <<TC as TreeCollection>::Tree as VebTree>::Value,
-);
+pub type CollectionKV<TC> = TreeKV<<TC as TreeCollection>::Tree>;
+pub type TreeRemoveResult<TC> = (Option<(TC, bool)>, CollectionKV<TC>);
+pub type TreeMaybeRemoveResult<TC> = Result<TreeRemoveResult<TC>, TC>;
 
 /// All operations are assumed to be `O(1)` complexity
 pub trait TreeCollection: Sized {
@@ -69,8 +57,8 @@ pub trait TreeCollection: Sized {
     fn insert<Q: Borrow<Self::High> + Into<Owned<Self::High>>>(
         &mut self,
         h: Q,
-        vals: TreeInsert<Self>,
-    ) -> Result<Self::High, (Q, Option<TreeInsert<Self>>)>;
+        vals: CollectionKV<Self>,
+    ) -> Result<Self::High, (Q, Option<CollectionKV<Self>>)>;
 
     /// Remove a value from a tree contained within.
     ///
@@ -81,6 +69,16 @@ pub trait TreeCollection: Sized {
     where
         Q: Borrow<Self::High>,
         R: FnOnce(Self::Tree) -> RemoveResult<Self::Tree>;
+
+    /// Remove a value from a tree contained within.
+    ///
+    /// If the tree containing the value is a monad, it will be removed from
+    /// the collection. If there are no remaning trees the entire collection
+    /// is erased.
+    fn maybe_remove_key<'a, Q, R>(self, h: Q, r: R) -> TreeMaybeRemoveResult<Self>
+    where
+        Q: Borrow<Self::High>,
+        R: FnOnce(Self::Tree) -> MaybeRemoveResult<Self::Tree>;
 }
 
 impl<High, V, S> TreeCollection for HashMap<High, V, S>
@@ -110,8 +108,8 @@ where
     fn insert<Q: Borrow<Self::High> + Into<Owned<Self::High>>>(
         &mut self,
         h: Q,
-        (l, v): TreeInsert<Self>,
-    ) -> Result<Self::High, (Q, Option<TreeInsert<Self>>)> {
+        (l, v): CollectionKV<Self>,
+    ) -> Result<Self::High, (Q, Option<CollectionKV<Self>>)> {
         use hashbrown::hash_map::RawEntryMut;
         let mut entry = match self.raw_entry_mut().from_key(h.borrow()) {
             RawEntryMut::Vacant(entry) => {
@@ -130,23 +128,50 @@ where
     {
         use hashbrown::hash_map::RawEntryMut;
         let entry = match self.raw_entry_mut().from_key(h.borrow()) {
+            RawEntryMut::Vacant(_) => unreachable!(),
+            RawEntryMut::Occupied(entry) => entry,
+        };
+
+        let mut val = None;
+        let entry = entry.replace_entry_with(|_k, v| {
+            let (v, rval) = r(v);
+            val = Some(rval);
+            v
+        });
+        let removed = matches!(entry, RawEntryMut::Vacant(_));
+        let val = val.unwrap();
+        if self.is_empty() {
+            (None, val)
+        } else {
+            (Some((self, removed)), val)
+        }
+    }
+
+    fn maybe_remove_key<'a, Q, R>(mut self, h: Q, r: R) -> TreeMaybeRemoveResult<Self>
+    where
+        Q: Borrow<Self::High>,
+        R: FnOnce(Self::Tree) -> MaybeRemoveResult<Self::Tree>,
+    {
+        use hashbrown::hash_map::RawEntryMut;
+        let entry = match self.raw_entry_mut().from_key(h.borrow()) {
             RawEntryMut::Vacant(_) => return Err(self),
             RawEntryMut::Occupied(entry) => entry,
         };
 
         let mut val = None;
-        entry.replace_entry_with(|_k, v| match r(v) {
+        let entry = entry.replace_entry_with(|_k, v| match r(v) {
             Err(v) => Some(v),
             Ok((v, rval)) => {
                 val = Some(rval);
                 v
             }
         });
-        let val = val.unwrap();
-        Ok(if self.is_empty() {
-            (None, val)
-        } else {
-            (Some(self), val)
-        })
+        let removed = matches!(entry, RawEntryMut::Vacant(_));
+        match (val, self.is_empty()) {
+            (Some(val), true) => Ok((None, val)),
+            (Some(val), false) => Ok((Some((self, removed)), val)),
+            (None, false) => Err(self),
+            (None, true) => unreachable!(),
+        }
     }
 }

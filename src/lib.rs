@@ -12,8 +12,14 @@ pub mod tree;
 
 use key::Owned;
 
+/// A shorthand for a kv-pair
+pub type TreeKV<VT> = (<VT as VebTree>::Key, <VT as VebTree>::Value);
+
+/// The possible results from a call to [`VebTree::remove_min`]/[`VebTree::remove_max`]
+pub type RemoveResult<VT> = (Option<VT>, TreeKV<VT>);
+
 /// The possible results from a call to [`VebTree::remove`]
-type RemoveResult<VT> = Result<(Option<VT>, (<VT as VebTree>::Key, <VT as VebTree>::Value)), VT>;
+pub type MaybeRemoveResult<VT> = Result<RemoveResult<VT>, VT>;
 
 pub trait VebTree: Sized {
     /// The key used to index the [`VebTree`].
@@ -57,7 +63,7 @@ pub trait VebTree: Sized {
     /// Deconstruct a monad tree into a `Key`.
     ///
     /// Complexity is expected to be `O(1)`.
-    fn into_monad(self) -> Result<(Self::Key, Self::Value), Self>;
+    fn into_monad(self) -> Result<TreeKV<Self>, Self>;
 
     /// Returns the minimum value stored in the tree
     ///
@@ -132,26 +138,26 @@ pub trait VebTree: Sized {
     /// replace and return the previously stored values.
     ///
     /// Complexity is expected to be `O(lg lg K)`.
-    fn insert<Q>(&mut self, k: Q, v: Self::Value) -> Option<(Self::Key, Self::Value)>
+    fn insert<Q>(&mut self, k: Q, v: Self::Value) -> Option<TreeKV<Self>>
     where
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>;
 
     /// Removes a value from the tree
     ///
     /// Complexity is expected to be `O(lg lg K)`.
-    fn remove<Q>(self, k: Q) -> RemoveResult<Self>
+    fn remove<Q>(self, k: Q) -> MaybeRemoveResult<Self>
     where
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>;
 
     /// Removes the minimum value from a tree
     ///
     /// Complexity is expected to be `O(lg lg K)`.
-    fn remove_min(self) -> (Option<Self>, (Self::Key, Self::Value));
+    fn remove_min(self) -> RemoveResult<Self>;
 
     /// Removes the maximum value from a tree
     ///
     /// Complexity is expected to be `O(lg lg K)`.
-    fn remove_max(self) -> (Option<Self>, (Self::Key, Self::Value));
+    fn remove_max(self) -> RemoveResult<Self>;
 }
 
 /// An iterator over the key-value pairs of a [`VebTree`]
@@ -466,7 +472,7 @@ impl<V: VebTree> VebTree for SizedVebTree<V> {
         v
     }
 
-    fn remove<Q>(mut self, k: Q) -> RemoveResult<Self>
+    fn remove<Q>(mut self, k: Q) -> MaybeRemoveResult<Self>
     where
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {

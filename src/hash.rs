@@ -11,7 +11,7 @@ use crate::{
     collection::VebTreeCollectionMarker,
     key::{Owned, VebKey},
     tree::VebTreeMarker,
-    RemoveResult, VebTree,
+    MaybeRemoveResult, VebTree,
 };
 
 #[phantom]
@@ -192,7 +192,7 @@ impl<K: Clone + Ord + Hash, V, S: BuildHasher + Default> VebTree for HashMap<K, 
         }
     }
 
-    fn remove<Q>(mut self, k: Q) -> RemoveResult<Self>
+    fn remove<Q>(mut self, k: Q) -> MaybeRemoveResult<Self>
     where
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {

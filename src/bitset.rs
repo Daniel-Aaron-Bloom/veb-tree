@@ -8,10 +8,13 @@ use alloc::collections::VecDeque;
 use ghost::phantom;
 
 use crate::{
-    collection::{TreeCollection, TreeInsert, TreeRemoveResult, VebTreeCollectionMarker},
+    collection::{
+        CollectionKV, TreeCollection, TreeMaybeRemoveResult, TreeRemoveResult,
+        VebTreeCollectionMarker,
+    },
     key::{Owned, VebKey},
     tree::VebTreeMarker,
-    RemoveResult, VebTree,
+    MaybeRemoveResult, RemoveResult, TreeKV, VebTree,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,13 +64,15 @@ impl ByteSet {
     }
     /// Create a mask for the bits under bit i
     fn mask_lower(i: u8) -> [u128; 2] {
-        let mut k = Self::from_monad(i, ()).0;
-        let o;
-        (k[0], o) = k[0].overflowing_sub(1);
-        if o {
-            k[1] -= 1;
-        }
-        k
+        let i = i as u32;
+        [
+            u128::MAX
+                .checked_shr(128u32.saturating_sub(i))
+                .unwrap_or_default(),
+            u128::MAX
+                .checked_shr(256u32.saturating_sub(i))
+                .unwrap_or_default(),
+        ]
     }
     /// Create a mask for the bits under bit i
     fn mask_higher(i: u8) -> [u128; 2] {
@@ -225,7 +230,7 @@ impl VebTree for ByteSet {
         }
     }
 
-    fn remove<Q>(mut self, k: Q) -> RemoveResult<Self>
+    fn remove<Q>(mut self, k: Q) -> MaybeRemoveResult<Self>
     where
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {
@@ -279,31 +284,33 @@ pub struct ByteMap<L> {
     set: ByteSet,
     list: L,
 }
+pub type TreeListRemoveResult<TL> = (Option<(TL, bool)>, TreeKV<<TL as TreeList>::Tree>);
 
-pub type TreeListRemoveResult<TL> = Result<
-    (
-        Option<(TL, bool)>,
-        (
-            <<TL as TreeList>::Tree as VebTree>::Key,
-            <<TL as TreeList>::Tree as VebTree>::Value,
-        ),
-    ),
-    TL,
->;
+pub type TreeListMaybeRemoveResult<TL> = Result<TreeListRemoveResult<TL>, TL>;
 
 pub trait TreeList: Sized {
     type Tree: VebTree;
     fn from_monad(v: Self::Tree) -> Self;
 
+    fn len(&self) -> usize;
     fn get(&self, i: usize) -> &Self::Tree;
     fn get_mut(&mut self, i: usize) -> &mut Self::Tree;
     fn insert_tree(&mut self, i: usize, v: Self::Tree);
     fn remove_key<F>(self, i: usize, f: F) -> TreeListRemoveResult<Self>
     where
         F: FnOnce(Self::Tree) -> RemoveResult<Self::Tree>;
+    fn maybe_remove_key<F>(self, i: usize, f: F) -> TreeListMaybeRemoveResult<Self>
+    where
+        F: FnOnce(Self::Tree) -> MaybeRemoveResult<Self::Tree>;
 }
 pub trait TreeListMarker<V> {
     type List: TreeList;
+}
+
+pub struct VecDequeMarker;
+
+impl<Tree: VebTree> ListMarker<Tree> for VecDequeMarker {
+    type List = VecDeque<Tree>;
 }
 
 impl<V: VebTree> TreeList for VecDeque<V> {
@@ -313,6 +320,9 @@ impl<V: VebTree> TreeList for VecDeque<V> {
         VecDeque::from_iter([v])
     }
 
+    fn len(&self) -> usize {
+        self.len()
+    }
     fn get(&self, i: usize) -> &Self::Tree {
         &self[i]
     }
@@ -335,7 +345,39 @@ impl<V: VebTree> TreeList for VecDeque<V> {
 
         // This is safe because we either write over it or forget it
         let tree = unsafe { core::ptr::read(&self[i]) };
-        let handler = PanicHandler(&mut self, 0);
+        let handler = PanicHandler(&mut self, i);
+
+        match f(tree) {
+            (None, val) => {
+                forget(handler);
+                forget(self.remove(i).unwrap());
+                if self.is_empty() {
+                    (None, val)
+                } else {
+                    (Some((self, true)), val)
+                }
+            }
+            (Some(tree), val) => {
+                forget(handler);
+                unsafe { core::ptr::write(&mut self[i], tree) };
+                (Some((self, false)), val)
+            }
+        }
+    }
+    fn maybe_remove_key<F>(mut self, i: usize, f: F) -> TreeListMaybeRemoveResult<Self>
+    where
+        F: FnOnce(Self::Tree) -> MaybeRemoveResult<Self::Tree>,
+    {
+        struct PanicHandler<'a, V>(&'a mut VecDeque<V>, usize);
+        impl<'a, V> Drop for PanicHandler<'a, V> {
+            fn drop(&mut self) {
+                forget(self.0.remove(self.1).unwrap());
+            }
+        }
+
+        // This is safe because we either write over it or forget it
+        let tree = unsafe { core::ptr::read(&self[i]) };
+        let handler = PanicHandler(&mut self, i);
 
         match f(tree) {
             Err(tree) => {
@@ -389,22 +431,72 @@ impl<L: TreeList> TreeCollection for ByteMap<L> {
     fn insert<Q: Borrow<Self::High> + Into<Owned<Self::High>>>(
         &mut self,
         h: Q,
-        (l, v): TreeInsert<Self>,
-    ) -> Result<Self::High, (Q, Option<TreeInsert<Self>>)> {
+        (l, v): CollectionKV<Self>,
+    ) -> Result<Self::High, (Q, Option<CollectionKV<Self>>)> {
+        assert_eq!(self.set.len(), self.list.len(), "{:?}", &self.set);
+        let prev = (self.set.clone(), self.list.len());
+
         let k = *h.borrow();
         let i = self.set.count_below(k);
-        if let Some(_) = self.set.insert(k, ()) {
+        let v = if let Some(_) = self.set.insert(k, ()) {
+            Err((h, self.list.get_mut(i).insert(l, v)))
+        } else {
             self.list.insert_tree(i, VebTree::from_monad(l, v));
             Ok(k)
-        } else {
-            Err((h, self.list.get_mut(i).insert(l, v)))
-        }
+        };
+        assert_eq!(
+            self.set.len(),
+            self.list.len(),
+            "{:?} (prev {prev:?})",
+            &self.set
+        );
+        v
     }
-
     fn remove_key<'a, Q, R>(mut self, h: Q, r: R) -> TreeRemoveResult<Self>
     where
         Q: Borrow<Self::High>,
         R: FnOnce(Self::Tree) -> RemoveResult<Self::Tree>,
+    {
+        let k = *h.borrow();
+        debug_assert!(self.set.find(k).is_some());
+        let i = self.set.count_below(k);
+
+        assert_eq!(self.set.len(), self.list.len(), "{:?}", &self.set);
+        let prev = (self.set.clone(), self.list.len());
+
+        if i >= self.list.len() {
+            assert!(
+                i < self.list.len(),
+                "{i} >= {} : {k} below {:?} (len {})",
+                self.list.len(),
+                &self.set,
+                self.set.len()
+            );
+        }
+
+        match self.list.remove_key(i, r) {
+            (None, v) => (None, v),
+            (Some((list, removed)), v) => {
+                self.list = list;
+                if removed {
+                    debug_assert!(self.set & ByteSetKey(k));
+                    self.set -= ByteSetKey(k);
+                }
+                assert_eq!(
+                    self.set.len(),
+                    self.list.len(),
+                    "{:?} {k}={removed} {prev:?}",
+                    &self.set
+                );
+                (Some((self, removed)), v)
+            }
+        }
+    }
+
+    fn maybe_remove_key<'a, Q, R>(mut self, h: Q, r: R) -> TreeMaybeRemoveResult<Self>
+    where
+        Q: Borrow<Self::High>,
+        R: FnOnce(Self::Tree) -> MaybeRemoveResult<Self::Tree>,
     {
         let k = *h.borrow();
         if self.set.find(k).is_none() {
@@ -412,18 +504,36 @@ impl<L: TreeList> TreeCollection for ByteMap<L> {
         }
         let i = self.set.count_below(k);
 
-        match self.list.remove_key(i, r) {
+        assert_eq!(self.set.len(), self.list.len(), "{:?}", &self.set);
+        let prev = (self.set.clone(), self.list.len());
+
+        assert!(
+            i < self.list.len(),
+            "{i} >= {} : {k} below {:?}",
+            self.list.len(),
+            &self.set
+        );
+
+        match self.list.maybe_remove_key(i, r) {
             Err(list) => {
                 self.list = list;
+                assert_eq!(self.set.len(), self.list.len(), "{:?}", &self.set);
                 Err(self)
             }
             Ok((None, v)) => Ok((None, v)),
             Ok((Some((list, removed)), v)) => {
                 self.list = list;
                 if removed {
-                    self.set.remove(k).unwrap();
+                    debug_assert!(self.set & ByteSetKey(k));
+                    self.set -= ByteSetKey(k);
                 }
-                Ok((Some(self), v))
+                assert_eq!(
+                    self.set.len(),
+                    self.list.len(),
+                    "{:?} {k}={removed} {prev:?}",
+                    &self.set
+                );
+                Ok((Some((self, removed)), v))
             }
         }
     }
@@ -436,7 +546,22 @@ mod test {
     use crate::{collection::TreeCollection, VebTree};
 
     use super::{ByteMap, ByteSet};
-
+    #[test]
+    fn test_masks() {
+        for i in 0usize..128 {
+            let r = [(1 << i) - 1, 0];
+            assert_eq!(ByteSet::mask_lower(i as u8), r, "{i}");
+        }
+        for i in 0usize..127 {
+            let r = [u128::MAX, (1 << i) - 1];
+            assert_eq!(ByteSet::mask_lower(128 + i as u8), r, "{i}");
+        }
+        for i in 0..=255 {
+            let mut mask = ByteSet::mask_lower(i);
+            mask &= ByteSet::from_monad(i, ());
+            assert_eq!(mask, [0, 0])
+        }
+    }
     #[test]
     fn simple_set() {
         let mut set = ByteSet::from_monad(0, ());

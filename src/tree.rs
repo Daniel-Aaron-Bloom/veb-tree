@@ -628,15 +628,19 @@ where
                 let (high, ()) = summary.max_val();
                 // We should always find an entry, since we're starting from the summary
                 // Try to remove the largest entry from the subtree
-                let (children, (low, val)) = children
-                    .remove_key(high.borrow(), |v| Ok(v.remove_max()))
-                    .ok()
-                    .unwrap();
+                let (children, (low, val)) =
+                    children.remove_key(high.borrow(), VebTree::remove_max);
                 let high = high.into().0;
+                let new_max = (K::join(high, low.into()), val);
+                // Remove the subtree entirely if it's a monad
+                let children = match children {
+                    None => None,
+                    Some((children, false)) => Some((summary, children)),
+                    Some((children, true)) => Some((summary.remove_max().0.unwrap(), children)),
+                };
                 self.data = Some(TreeData {
-                    max: (K::join(high, low.into()), val),
-                    // Remove the subtree entirely if it's a monad
-                    children: children.map(|children| ((summary, children))),
+                    max: new_max,
+                    children,
                 });
                 Ok((Some(self), max))
             }
@@ -647,15 +651,22 @@ where
             }) => {
                 let (high, low) = K::split(k);
 
-                let (children, low) = match children.remove_key(high.borrow(), |v| v.remove(low)) {
-                    Err(children) => (Some(children), None),
-                    Ok((children, res)) => (children, Some(res)),
+                let (children, low) = match children
+                    .maybe_remove_key(high.borrow(), |v| v.remove(low))
+                {
+                    Err(children) => (Some((summary, children)), None),
+                    Ok((None, res)) => (None, Some(res)),
+                    Ok((Some((children, false)), res)) => (Some((summary, children)), Some(res)),
+                    Ok((Some((children, true)), res)) => (
+                        Some((
+                            summary.remove(high.borrow()).ok().unwrap().0.unwrap(),
+                            children,
+                        )),
+                        Some(res),
+                    ),
                 };
 
-                self.data = Some(TreeData {
-                    max,
-                    children: children.map(|children| (summary, children)),
-                });
+                self.data = Some(TreeData { max, children });
                 if let Some((low, val)) = low {
                     Ok((Some(self), (K::join(high, low.into()), val)))
                 } else {
@@ -687,15 +698,16 @@ where
                 let (high, ()) = summary.min_val();
                 // We should always find an entry, since we're starting from the summary
                 // Try to remove the smallest entry from the subtree
-                let (children, (low, val)) = children
-                    .remove_key(high.borrow(), |v| Ok(v.remove_min()))
-                    .ok()
-                    .unwrap();
+                let (children, (low, val)) =
+                    children.remove_key(high.borrow(), VebTree::remove_min);
+                // Remove the subtree entirely if it's a monad
                 let min = K::join(high.into().0, low.into());
-                self.data = Some(TreeData {
-                    max,
-                    children: children.map(|children| ((summary, children))),
-                });
+                let children = match children {
+                    None => None,
+                    Some((children, false)) => Some((summary, children)),
+                    Some((children, true)) => Some((summary.remove_min().0.unwrap(), children)),
+                };
+                self.data = Some(TreeData { max, children });
                 let r = replace(&mut self.min, (min, val));
                 (Some(self), r)
             }
@@ -721,15 +733,19 @@ where
                 let (high, ()) = summary.max_val();
                 // We should always find an entry, since we're starting from the summary
                 // Try to remove the smallest entry from the subtree
-                let (children, (low, val)) = children
-                    .remove_key(high.borrow(), |v| Ok(v.remove_max()))
-                    .ok()
-                    .unwrap();
+                let (children, (low, val)) =
+                    children.remove_key(high.borrow(), VebTree::remove_max);
                 let high = high.into().0;
+                let new_max = (K::join(high, low.into()), val);
+                // Remove the subtree entirely if it's a monad
+                let children = match children {
+                    None => None,
+                    Some((children, false)) => Some((summary, children)),
+                    Some((children, true)) => Some((summary.remove_max().0.unwrap(), children)),
+                };
                 self.data = Some(TreeData {
-                    max: (K::join(high, low.into()), val),
-                    // Remove the subtree entirely if it's a monad
-                    children: children.map(|children| ((summary, children))),
+                    max: new_max,
+                    children,
                 });
                 (Some(self), max)
             }
@@ -741,7 +757,9 @@ where
 mod test {
     use core::fmt;
 
-    use crate::{bitset::ByteSetMarker, hash::HashMapMarker, key::MaybeBorrowed, VebTree};
+    use crate::{
+        bitset::ByteSetMarker, hash::HashMapMarker, key::MaybeBorrowed, tree::TreeMarker, VebTree,
+    };
 
     use super::Tree;
 
@@ -795,6 +813,19 @@ mod test {
         }
     }
 
+    #[test]
+    fn simple2() {
+        //VebTree
+        type U32Tree = Tree<
+            u32,                                      // Key
+            (),                                       // Value
+            TreeMarker<ByteSetMarker, ByteSetMarker>, // Summary
+            // Children
+            HashMapMarker<
+                TreeMarker<ByteSetMarker, ByteSetMarker>, // Child "tree"
+            >,
+        >;
+    }
     #[test]
     fn simple() {
         //VebTree
