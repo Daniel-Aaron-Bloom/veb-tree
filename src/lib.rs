@@ -11,18 +11,7 @@ pub mod tree;
 use key::Owned;
 
 /// The possible results from a call to [`VebTree::remove`]
-#[must_use]
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum RemoveResult<K> {
-    /// The requested key was found and deleted succeeded
-    Removed(K),
-    /// The requested key was found but not deleted because the tree is a monad.
-    /// If the caller wishes to complete the delete, they should remove the
-    /// whole tree
-    Monad,
-    /// The key requested for deletion was not present
-    NotPresent,
-}
+type RemoveResult<VT> = Result<(Option<VT>, (<VT as VebTree>::Key, <VT as VebTree>::Value)), VT>;
 
 pub trait VebTree: Sized {
     /// The key used to index the [`VebTree`].
@@ -148,19 +137,19 @@ pub trait VebTree: Sized {
     /// Removes a value from the tree
     ///
     /// Complexity is expected to be `O(lg lg K)`.
-    fn remove<Q>(&mut self, k: Q) -> RemoveResult<(Self::Key, Self::Value)>
+    fn remove<Q>(self, k: Q) -> RemoveResult<Self>
     where
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>;
 
     /// Removes the minimum value from a tree
     ///
     /// Complexity is expected to be `O(lg lg K)`.
-    fn remove_min(&mut self) -> Option<(Self::Key, Self::Value)>;
+    fn remove_min(self) -> (Option<Self>, (Self::Key, Self::Value));
 
     /// Removes the maximum value from a tree
     ///
     /// Complexity is expected to be `O(lg lg K)`.
-    fn remove_max(&mut self) -> Option<(Self::Key, Self::Value)>;
+    fn remove_max(self) -> (Option<Self>, (Self::Key, Self::Value));
 }
 
 /// An iterator over the key-value pairs of a [`VebTree`]
@@ -475,30 +464,43 @@ impl<V: VebTree> VebTree for SizedVebTree<V> {
         v
     }
 
-    fn remove<Q>(&mut self, k: Q) -> RemoveResult<(Self::Key, Self::Value)>
+    fn remove<Q>(mut self, k: Q) -> RemoveResult<Self>
     where
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {
-        let v = self.tree.remove(k);
-        if matches!(v, RemoveResult::Removed(_)) {
-            self.size -= 1;
+        match self.tree.remove(k) {
+            Ok((Some(tree), r)) => {
+                self.tree = tree;
+                self.size -= 1;
+                Ok((Some(self), r))
+            }
+            Ok((None, v)) => Ok((None, v)),
+            Err(tree) => {
+                self.tree = tree;
+                Err(self)
+            }
         }
-        v
     }
 
-    fn remove_min(&mut self) -> Option<(Self::Key, Self::Value)> {
-        let v = self.tree.remove_min();
-        if v.is_some() {
-            self.size -= 1;
+    fn remove_min(mut self) -> (Option<Self>, (Self::Key, Self::Value)) {
+        self.size -= 1;
+        let (tree, v) = self.tree.remove_min();
+        if let Some(tree) = tree {
+            self.tree = tree;
+            (Some(self), v)
+        } else {
+            (None, v)
         }
-        v
     }
 
-    fn remove_max(&mut self) -> Option<(Self::Key, Self::Value)> {
-        let v = self.tree.remove_max();
-        if v.is_some() {
-            self.size -= 1;
+    fn remove_max(mut self) -> (Option<Self>, (Self::Key, Self::Value)) {
+        self.size -= 1;
+        let (tree, v) = self.tree.remove_max();
+        if let Some(tree) = tree {
+            self.tree = tree;
+            (Some(self), v)
+        } else {
+            (None, v)
         }
-        v
     }
 }

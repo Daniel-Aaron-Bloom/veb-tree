@@ -4,34 +4,11 @@ use core::{
 };
 
 use hashbrown::{
-    hash_map::{RawOccupiedEntryMut, RawVacantEntryMut},
     HashMap,
 };
 
-use crate::key::VebKey;
 use crate::{key::Owned, VebTree};
-
-/// A view into a single entry in a collection
-pub enum Entry<O, V> {
-    Occupied(O),
-    Vacant(V),
-}
-
-impl<O, V> Entry<O, V> {
-    pub fn occupied(self) -> Result<O, V> {
-        match self {
-            Self::Occupied(o) => Ok(o),
-            Self::Vacant(v) => Err(v),
-        }
-    }
-
-    pub fn vacant(self) -> Result<V, O> {
-        match self {
-            Self::Occupied(o) => Err(o),
-            Self::Vacant(v) => Ok(v),
-        }
-    }
-}
+use crate::{key::VebKey, RemoveResult};
 
 /// A marker trait to help with associated type bounds
 pub trait SuperTreeCollection<K: VebKey, V> {
@@ -52,29 +29,23 @@ pub trait VebTreeCollectionMarker<K: VebKey, V> {
     type TreeCollection: SuperTreeCollection<K, V>;
 }
 
-pub struct TreeRemoveResult<Q, H, T> {
-    pub key: Q,
-    pub high: H,
-    pub tree: T,
-    pub empty: bool,
-}
+pub type TreeRemoveResult<TC> = Result<
+    (
+        Option<TC>,
+        (
+            <<TC as TreeCollection>::Tree as VebTree>::Key,
+            <<TC as TreeCollection>::Tree as VebTree>::Value,
+        ),
+    ),
+    TC,
+>;
 
 /// All operations are assumed to be `O(1)` complexity
-pub trait TreeCollection {
+pub trait TreeCollection: Sized {
     /// The key used to index this collection
     type High;
     /// The type of the trees stored in this collection
     type Tree: VebTree;
-
-    /// The GAL marker for the [`Entry::Occupied`] type
-    type Occupied<'a, Q>
-    where
-        Self: 'a;
-
-    /// The GAL marker for the [`Entry::Vacant`] type
-    type Vacant<'a, Q>
-    where
-        Self: 'a;
 
     /// Construct a collection from a single entry
     fn create(h: &Self::High, tree: Self::Tree) -> Self;
@@ -83,39 +54,27 @@ pub trait TreeCollection {
     fn get(&self, h: &Self::High) -> Option<&Self::Tree>;
 
     /// Get a mutable reference to the tree corresponding to the key `h`
-    fn get_mut(&mut self, h: &Self::High) -> Option<&mut Self::Tree> {
-        Some(Self::decompose(self.entry(h).occupied().ok()?).1)
-    }
+    fn get_mut(&mut self, h: &Self::High) -> Option<&mut Self::Tree>;
 
-    /// Find entry for the `h` subtree
-    fn entry<Q>(&mut self, h: Q) -> Entry<Self::Occupied<'_, Q>, Self::Vacant<'_, Q>>
+    /// Insert an value into a tree contained within
+    /// 
+    /// If the collection does not contain a tree, returns `Ok` with a copy of the key
+    /// to be used to recored in the summary.
+    /// 
+    /// Otherwise insertion on the existing tree is performed and any pre-existing values
+    /// are returned
+    fn insert<Q>(&mut self, h: Q, l: <Self::Tree as VebTree>::Key, v: <Self::Tree as VebTree>::Value) -> Result<Self::High, (Q, Option<(<Self::Tree as VebTree>::Key, <Self::Tree as VebTree>::Value)>)>
+    where Q: Borrow<Self::High> + Into<Owned<Self::High>>;
+
+    /// Remove a value from a tree contained within.
+    ///
+    /// If the tree containing the value is a monad, it will be removed from
+    /// the collection. If there are no remaning trees the entire collection
+    /// is erased.
+    fn remove_key<'a, Q, R>(self, h: Q, r: R) -> TreeRemoveResult<Self>
     where
-        Q: Borrow<Self::High>;
-
-    /// Dereference an occupied entry
-    fn deref<'a, 'b, Q>(o: &'a mut Self::Occupied<'b, Q>) -> &'a mut Self::Tree;
-
-    /// Decompose an occupied entry
-    fn decompose<'a, Q>(o: Self::Occupied<'a, Q>) -> (Q, &'a mut Self::Tree);
-
-    /// Remove the tree from an occupied entry
-    fn remove<'a, Q>(o: Self::Occupied<'a, Q>) -> TreeRemoveResult<Q, Self::High, Self::Tree>;
-
-    /// Borrow the key from a vacant entry
-    fn key<'a, 'b, Q>(v: &'a Self::Vacant<'b, Q>) -> &'a Self::High
-    where
-        Q: Borrow<Self::High>;
-
-    /// Add a tree to a vacant entry
-    fn insert<'a, Q>(v: Self::Vacant<'a, Q>, tree: Self::Tree) -> &'a mut Self::Tree
-    where
-        Q: Borrow<Self::High> + Into<Owned<Self::High>>;
-}
-
-pub struct EntryWrapper<E, Q> {
-    entry: E,
-    key: Q,
-    len: usize,
+        Q: Borrow<Self::High>,
+        R: FnOnce(Self::Tree) -> RemoveResult<Self::Tree>;
 }
 
 impl<High, V, S> TreeCollection for HashMap<High, V, S>
@@ -126,9 +85,6 @@ where
 {
     type High = High;
     type Tree = V;
-
-    type Vacant<'a, Q> = EntryWrapper<RawVacantEntryMut<'a, High, V, S>, Q>;
-    type Occupied<'a, Q> = EntryWrapper<RawOccupiedEntryMut<'a, High, V, S>, Q>;
 
     fn create(h: &Self::High, tree: Self::Tree) -> Self {
         let v = HashMap::from_iter([(h.clone(), tree)]);
@@ -141,45 +97,47 @@ where
     fn get(&self, h: &Self::High) -> Option<&Self::Tree> {
         self.get(h)
     }
+    fn get_mut(&mut self, h: &Self::High) -> Option<&mut Self::Tree> {
+        self.get_mut(h)
+    }
 
-    fn entry<Q: Borrow<Self::High>>(
-        &mut self,
-        key: Q,
-    ) -> Entry<Self::Occupied<'_, Q>, Self::Vacant<'_, Q>> {
+    fn insert<Q>(&mut self, h: Q, l: <Self::Tree as VebTree>::Key, v: <Self::Tree as VebTree>::Value) -> Result<Self::High, (Q, Option<(<Self::Tree as VebTree>::Key, <Self::Tree as VebTree>::Value)>)>
+    where Q: Borrow<Self::High> + Into<Owned<Self::High>>{
         use hashbrown::hash_map::RawEntryMut;
-        let len = self.len();
-        match self.raw_entry_mut().from_key(key.borrow()) {
-            RawEntryMut::Occupied(entry) => Entry::Occupied(EntryWrapper { entry, key, len }),
-            RawEntryMut::Vacant(entry) => Entry::Vacant(EntryWrapper { entry, key, len }),
-        }
+        let mut entry = match self.raw_entry_mut().from_key(h.borrow()) {
+            RawEntryMut::Vacant(entry) => {
+                return Ok(entry.insert(h.into().0, V::from_monad(l, v)).0.clone())
+            },
+            RawEntryMut::Occupied(entry) => entry,
+        };
+        let v = entry.get_mut().insert(l, v);
+        Err((h, v))
     }
 
-    fn deref<'a, 'b, Q>(o: &'a mut Self::Occupied<'b, Q>) -> &'a mut Self::Tree {
-        o.entry.get_mut()
-    }
+    fn remove_key<'a, Q, R>(mut self, h: Q, r: R) -> TreeRemoveResult<Self>
+    where
+        Q: Borrow<Self::High>,
+        R: FnOnce(Self::Tree) -> RemoveResult<Self::Tree>,
+    {
+        use hashbrown::hash_map::RawEntryMut;
+        let entry = match self.raw_entry_mut().from_key(h.borrow()) {
+            RawEntryMut::Vacant(_) => return Err(self),
+            RawEntryMut::Occupied(entry) => entry,
+        };
 
-    fn decompose<'a, Q>(o: Self::Occupied<'a, Q>) -> (Q, &'a mut Self::Tree) {
-        (o.key, o.entry.into_mut())
-    }
-
-    fn remove<'a, Q>(o: Self::Occupied<'a, Q>) -> TreeRemoveResult<Q, Self::High, Self::Tree> {
-        let (k, v) = o.entry.remove_entry();
-        TreeRemoveResult {
-            key: o.key,
-            high: k,
-            tree: v,
-            empty: o.len == 1, // if this was the final tree, we are empty
-        }
-    }
-
-    fn key<'a, 'b, Q: Borrow<Self::High>>(v: &'a Self::Vacant<'b, Q>) -> &'a Self::High {
-        v.key.borrow()
-    }
-
-    fn insert<'a, Q: Borrow<Self::High> + Into<Owned<Self::High>>>(
-        v: Self::Vacant<'a, Q>,
-        tree: Self::Tree,
-    ) -> &'a mut Self::Tree {
-        v.entry.insert(v.key.into().0, tree).1
+        let mut val = None;
+        entry.replace_entry_with(|_k, v| match r(v) {
+            Err(v) => Some(v),
+            Ok((v, rval)) => {
+                val = Some(rval);
+                v
+            }
+        });
+        let val = val.unwrap();
+        Ok(if self.is_empty() {
+            (None, val)
+        } else {
+            (Some(self), val)
+        })
     }
 }

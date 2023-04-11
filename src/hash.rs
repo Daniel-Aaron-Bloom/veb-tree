@@ -194,31 +194,36 @@ impl<K: Clone + Ord + Hash, V, S: BuildHasher + Default> VebTree for HashMap<K, 
         }
     }
 
-    fn remove<Q>(&mut self, k: Q) -> RemoveResult<(Self::Key, Self::Value)>
+    fn remove<Q>(mut self, k: Q) -> RemoveResult<Self>
     where
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {
         use hashbrown::hash_map::Entry;
         match (self.len(), self.entry(k.into().0)) {
-            (1, Entry::Occupied(_)) => RemoveResult::Monad,
-            (_, Entry::Occupied(e)) => RemoveResult::Removed(e.remove_entry()),
-            (_, Entry::Vacant(_)) => RemoveResult::NotPresent,
+            (1, Entry::Occupied(e)) => Ok((None, e.remove_entry())),
+            (_, Entry::Occupied(e)) => {
+                let r = e.remove_entry();
+                Ok((Some(self), r))
+            }
+            (_, Entry::Vacant(_)) => Err(self),
         }
     }
 
-    fn remove_min(&mut self) -> Option<(Self::Key, Self::Value)> {
+    fn remove_min(mut self) -> (Option<Self>, (Self::Key, Self::Value)) {
         if self.len() == 1 {
-            None
+            (None, self.into_iter().next().unwrap())
         } else {
-            self.remove_entry(&self.min_val().0.clone())
+            let v = self.remove_entry(&self.min_val().0.clone());
+            (Some(self), v.unwrap())
         }
     }
 
-    fn remove_max(&mut self) -> Option<(Self::Key, Self::Value)> {
+    fn remove_max(mut self) -> (Option<Self>, (Self::Key, Self::Value)) {
         if self.len() == 1 {
-            None
+            (None, self.into_iter().next().unwrap())
         } else {
-            self.remove_entry(&self.max_val().0.clone())
+            let v = self.remove_entry(&self.max_val().0.clone());
+            (Some(self), v.unwrap())
         }
     }
 }
