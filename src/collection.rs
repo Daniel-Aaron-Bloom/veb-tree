@@ -85,9 +85,9 @@ pub trait TreeCollection: Sized {
 
 impl<High, V, S> TreeCollection for HashMap<High, V, S>
 where
-    High: 'static + Clone + Eq + Hash,
-    V: 'static + VebTree,
-    S: 'static + BuildHasher + Default,
+    High: Clone + Eq + Hash,
+    V: VebTree,
+    S: BuildHasher + Default,
 {
     type High = High;
     type Tree = V;

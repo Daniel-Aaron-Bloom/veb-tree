@@ -20,10 +20,9 @@ pub struct HashMapMarker<#[invariant] Tree = (), #[invariant] S = DefaultHashBui
 impl<K, V, Tree, S> VebTreeCollectionMarker<K, V> for HashMapMarker<Tree, S>
 where
     K: VebKey,
-    K::High: 'static + Hash,
+    K::High: Hash,
     Tree: VebTreeMarker<K::Low, V>,
-    Tree::Tree: 'static,
-    S: 'static + BuildHasher + Default,
+    S: BuildHasher + Default,
 {
     type TreeCollection = HashMap<K::High, Tree::Tree, S>;
 }
@@ -31,8 +30,7 @@ where
 impl<K, V, S> VebTreeMarker<K, V> for HashMapMarker<(), S>
 where
     K: Ord + Clone + Hash,
-    V: 'static,
-    S: 'static + BuildHasher + Default,
+    S: BuildHasher + Default,
 {
     type Tree = HashMap<K, V, S>;
 }
