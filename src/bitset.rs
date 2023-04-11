@@ -1,11 +1,15 @@
 use core::{
     borrow::Borrow,
-    ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign},
+    mem::forget,
+    ops::{Add, AddAssign, BitAnd, BitAndAssign, Sub, SubAssign},
 };
 
+use alloc::collections::VecDeque;
+use ghost::phantom;
+
 use crate::{
-    collection::{TreeCollection, TreeRemoveResult},
-    key::Owned,
+    collection::{TreeCollection, TreeInsert, TreeRemoveResult, VebTreeCollectionMarker},
+    key::{Owned, VebKey},
     tree::VebTreeMarker,
     RemoveResult, VebTree,
 };
@@ -78,15 +82,15 @@ impl ByteSet {
 
 struct ByteSetKey(u8);
 
-impl BitOr<ByteSetKey> for ByteSet {
+impl Add<ByteSetKey> for ByteSet {
     type Output = Self;
-    fn bitor(mut self, rhs: ByteSetKey) -> Self::Output {
-        self |= rhs;
+    fn add(mut self, rhs: ByteSetKey) -> Self::Output {
+        self += rhs;
         self
     }
 }
-impl BitOrAssign<ByteSetKey> for ByteSet {
-    fn bitor_assign(&mut self, rhs: ByteSetKey) {
+impl AddAssign<ByteSetKey> for ByteSet {
+    fn add_assign(&mut self, rhs: ByteSetKey) {
         self.0[rhs.0 as usize / 128] |= 1 << (rhs.0 % 128);
     }
 }
@@ -105,15 +109,15 @@ impl BitAndAssign<ByteSet> for [u128; 2] {
     }
 }
 
-impl BitXor<ByteSetKey> for ByteSet {
+impl Sub<ByteSetKey> for ByteSet {
     type Output = Self;
-    fn bitxor(mut self, rhs: ByteSetKey) -> Self::Output {
-        self ^= rhs;
+    fn sub(mut self, rhs: ByteSetKey) -> Self::Output {
+        self -= rhs;
         self
     }
 }
-impl BitXorAssign<ByteSetKey> for ByteSet {
-    fn bitxor_assign(&mut self, rhs: ByteSetKey) {
+impl SubAssign<ByteSetKey> for ByteSet {
+    fn sub_assign(&mut self, rhs: ByteSetKey) {
         self.0[rhs.0 as usize / 128] &= !(1 << (rhs.0 % 128));
     }
 }
@@ -126,7 +130,7 @@ impl VebTree for ByteSet {
     type EntryKey<'a> = u8;
 
     fn from_monad(k: Self::Key, v: Self::Value) -> Self {
-        Self([0; 2], v) | ByteSetKey(k)
+        Self([0; 2], v) + ByteSetKey(k)
     }
     fn is_monad(&self) -> bool {
         self.len() == 1
@@ -216,7 +220,7 @@ impl VebTree for ByteSet {
         if *self & ByteSetKey(k) {
             Some((k, v))
         } else {
-            *self |= ByteSetKey(k);
+            *self += ByteSetKey(k);
             None
         }
     }
@@ -231,7 +235,7 @@ impl VebTree for ByteSet {
         } else if self.len() == 1 {
             Ok((None, (k, ())))
         } else {
-            self ^= ByteSetKey(k);
+            self -= ByteSetKey(k);
             Ok((Some(self), (k, ())))
         }
     }
@@ -240,7 +244,7 @@ impl VebTree for ByteSet {
         if self.len() == 1 {
             (None, (k, ()))
         } else {
-            self ^= ByteSetKey(k);
+            self -= ByteSetKey(k);
             (Some(self), (k, ()))
         }
     }
@@ -249,10 +253,26 @@ impl VebTree for ByteSet {
         if self.len() == 1 {
             return (None, (k, ()));
         } else {
-            self ^= ByteSetKey(k);
+            self -= ByteSetKey(k);
             (Some(self), (k, ()))
         }
     }
+}
+
+pub trait ListMarker<Tree: VebTree> {
+    type List: TreeList<Tree = Tree>;
+}
+
+#[phantom]
+pub struct ByteMapMarker<#[invariant] ListMarker, #[invariant] Tree>;
+
+impl<K, V, List, Tree> VebTreeCollectionMarker<K, V> for ByteMapMarker<List, Tree>
+where
+    K: VebKey<High = u8>,
+    Tree: VebTreeMarker<K::Low, V>,
+    List: ListMarker<Tree::Tree>,
+{
+    type TreeCollection = ByteMap<List::List>;
 }
 
 pub struct ByteMap<L> {
@@ -277,9 +297,68 @@ pub trait TreeList: Sized {
 
     fn get(&self, i: usize) -> &Self::Tree;
     fn get_mut(&mut self, i: usize) -> &mut Self::Tree;
-    fn remove<F>(self, i: usize, f: F) -> TreeListRemoveResult<Self>
-    where F: FnOnce(Self::Tree) -> RemoveResult<Self::Tree>;
-    fn insert(&mut self, i: usize, v: Self::Tree) -> Self::Tree;
+    fn insert_tree(&mut self, i: usize, v: Self::Tree);
+    fn remove_key<F>(self, i: usize, f: F) -> TreeListRemoveResult<Self>
+    where
+        F: FnOnce(Self::Tree) -> RemoveResult<Self::Tree>;
+}
+pub trait TreeListMarker<V> {
+    type List: TreeList;
+}
+
+impl<V: VebTree> TreeList for VecDeque<V> {
+    type Tree = V;
+
+    fn from_monad(v: Self::Tree) -> Self {
+        VecDeque::from_iter([v])
+    }
+
+    fn get(&self, i: usize) -> &Self::Tree {
+        &self[i]
+    }
+    fn get_mut(&mut self, i: usize) -> &mut Self::Tree {
+        &mut self[i]
+    }
+    fn insert_tree(&mut self, i: usize, v: Self::Tree) {
+        self.insert(i, v);
+    }
+    fn remove_key<F>(mut self, i: usize, f: F) -> TreeListRemoveResult<Self>
+    where
+        F: FnOnce(Self::Tree) -> RemoveResult<Self::Tree>,
+    {
+        struct PanicHandler<'a, V>(&'a mut VecDeque<V>, usize);
+        impl<'a, V> Drop for PanicHandler<'a, V> {
+            fn drop(&mut self) {
+                forget(self.0.remove(self.1).unwrap());
+            }
+        }
+
+        // This is safe because we either write over it or forget it
+        let tree = unsafe { core::ptr::read(&self[i]) };
+        let handler = PanicHandler(&mut self, 0);
+
+        match f(tree) {
+            Err(tree) => {
+                forget(handler);
+                unsafe { core::ptr::write(&mut self[i], tree) };
+                Err(self)
+            }
+            Ok((None, val)) => {
+                forget(handler);
+                forget(self.remove(i).unwrap());
+                if self.is_empty() {
+                    Ok((None, val))
+                } else {
+                    Ok((Some((self, true)), val))
+                }
+            }
+            Ok((Some(tree), val)) => {
+                forget(handler);
+                unsafe { core::ptr::write(&mut self[i], tree) };
+                Ok((Some((self, false)), val))
+            }
+        }
+    }
 }
 
 /// All operations are assumed to be `O(1)` complexity
@@ -307,12 +386,15 @@ impl<L: TreeList> TreeCollection for ByteMap<L> {
         Some(self.list.get_mut(self.set.count_below(*h)))
     }
 
-    fn insert<Q>(&mut self, h: Q, l: <Self::Tree as VebTree>::Key, v: <Self::Tree as VebTree>::Value) -> Result<Self::High, (Q, Option<(<Self::Tree as VebTree>::Key, <Self::Tree as VebTree>::Value)>)>
-    where Q: Borrow<Self::High> + Into<Owned<Self::High>> {
+    fn insert<Q: Borrow<Self::High> + Into<Owned<Self::High>>>(
+        &mut self,
+        h: Q,
+        (l, v): TreeInsert<Self>,
+    ) -> Result<Self::High, (Q, Option<TreeInsert<Self>>)> {
         let k = *h.borrow();
         let i = self.set.count_below(k);
         if let Some(_) = self.set.insert(k, ()) {
-            self.list.insert(i, VebTree::from_monad(l, v));
+            self.list.insert_tree(i, VebTree::from_monad(l, v));
             Ok(k)
         } else {
             Err((h, self.list.get_mut(i).insert(l, v)))
@@ -326,15 +408,15 @@ impl<L: TreeList> TreeCollection for ByteMap<L> {
     {
         let k = *h.borrow();
         if self.set.find(k).is_none() {
-            return Err(self)
+            return Err(self);
         }
         let i = self.set.count_below(k);
 
-        match self.list.remove(i, r) {
+        match self.list.remove_key(i, r) {
             Err(list) => {
                 self.list = list;
                 Err(self)
-            },
+            }
             Ok((None, v)) => Ok((None, v)),
             Ok((Some((list, removed)), v)) => {
                 self.list = list;
@@ -349,12 +431,14 @@ impl<L: TreeList> TreeCollection for ByteMap<L> {
 
 #[cfg(test)]
 mod test {
-    use crate::VebTree;
+    use alloc::collections::VecDeque;
 
-    use super::ByteSet;
+    use crate::{collection::TreeCollection, VebTree};
+
+    use super::{ByteMap, ByteSet};
 
     #[test]
-    fn simple() {
+    fn simple_set() {
         let mut set = ByteSet::from_monad(0, ());
         for i in 1..=255u8 {
             assert_eq!(set.lowest(), 0);
@@ -387,5 +471,13 @@ mod test {
         }
         assert_eq!(set.lowest(), 255);
         assert_eq!(set.highest(), 255);
+    }
+    #[test]
+    fn simple_map() {
+        type Map = ByteMap<VecDeque<ByteSet>>;
+
+        let mut m = Map::create(&0, ByteSet::from_monad(0, ()));
+        let _ = m.insert(0, (5, ()));
+        let _ = m.insert(1, (5, ()));
     }
 }

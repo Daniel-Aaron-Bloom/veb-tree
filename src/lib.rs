@@ -1,5 +1,7 @@
 #![no_std]
 
+extern crate alloc;
+
 use core::borrow::Borrow;
 
 pub mod bitset;

@@ -570,7 +570,7 @@ where
         };
 
         if let Some((mut summary, mut children)) = data.children.take() {
-            let r = match children.insert(high, low.into().0, v) {
+            let r = match children.insert(high, (low.into().0, v)) {
                 Ok(high) => {
                     summary.insert(high, ());
                     None

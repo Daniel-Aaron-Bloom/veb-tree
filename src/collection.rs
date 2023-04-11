@@ -3,9 +3,7 @@ use core::{
     hash::{BuildHasher, Hash},
 };
 
-use hashbrown::{
-    HashMap,
-};
+use hashbrown::HashMap;
 
 use crate::{key::Owned, VebTree};
 use crate::{key::VebKey, RemoveResult};
@@ -40,6 +38,11 @@ pub type TreeRemoveResult<TC> = Result<
     TC,
 >;
 
+pub type TreeInsert<TC> = (
+    <<TC as TreeCollection>::Tree as VebTree>::Key,
+    <<TC as TreeCollection>::Tree as VebTree>::Value,
+);
+
 /// All operations are assumed to be `O(1)` complexity
 pub trait TreeCollection: Sized {
     /// The key used to index this collection
@@ -57,14 +60,17 @@ pub trait TreeCollection: Sized {
     fn get_mut(&mut self, h: &Self::High) -> Option<&mut Self::Tree>;
 
     /// Insert an value into a tree contained within
-    /// 
+    ///
     /// If the collection does not contain a tree, returns `Ok` with a copy of the key
     /// to be used to recored in the summary.
-    /// 
+    ///
     /// Otherwise insertion on the existing tree is performed and any pre-existing values
     /// are returned
-    fn insert<Q>(&mut self, h: Q, l: <Self::Tree as VebTree>::Key, v: <Self::Tree as VebTree>::Value) -> Result<Self::High, (Q, Option<(<Self::Tree as VebTree>::Key, <Self::Tree as VebTree>::Value)>)>
-    where Q: Borrow<Self::High> + Into<Owned<Self::High>>;
+    fn insert<Q: Borrow<Self::High> + Into<Owned<Self::High>>>(
+        &mut self,
+        h: Q,
+        vals: TreeInsert<Self>,
+    ) -> Result<Self::High, (Q, Option<TreeInsert<Self>>)>;
 
     /// Remove a value from a tree contained within.
     ///
@@ -101,13 +107,16 @@ where
         self.get_mut(h)
     }
 
-    fn insert<Q>(&mut self, h: Q, l: <Self::Tree as VebTree>::Key, v: <Self::Tree as VebTree>::Value) -> Result<Self::High, (Q, Option<(<Self::Tree as VebTree>::Key, <Self::Tree as VebTree>::Value)>)>
-    where Q: Borrow<Self::High> + Into<Owned<Self::High>>{
+    fn insert<Q: Borrow<Self::High> + Into<Owned<Self::High>>>(
+        &mut self,
+        h: Q,
+        (l, v): TreeInsert<Self>,
+    ) -> Result<Self::High, (Q, Option<TreeInsert<Self>>)> {
         use hashbrown::hash_map::RawEntryMut;
         let mut entry = match self.raw_entry_mut().from_key(h.borrow()) {
             RawEntryMut::Vacant(entry) => {
                 return Ok(entry.insert(h.into().0, V::from_monad(l, v)).0.clone())
-            },
+            }
             RawEntryMut::Occupied(entry) => entry,
         };
         let v = entry.get_mut().insert(l, v);
