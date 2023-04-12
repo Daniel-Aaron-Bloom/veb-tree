@@ -177,11 +177,11 @@ fn criterion_benchmark(c: &mut Criterion) {
         s
     };
 
-    for_all_widths(
-        c.benchmark_group(format!("insert-veb")),
-        veb_maker,
-        |s, x| VEBOperations::insert(black_box(s), x),
-    );
+    // for_all_widths(
+    //     c.benchmark_group(format!("insert-veb")),
+    //     veb_maker,
+    //     |s, x| VEBOperations::insert(black_box(s), x),
+    // );
     // for_all_widths(
     //     c.benchmark_group(format!("remove-veb")),
     //     veb_maker,
@@ -192,12 +192,12 @@ fn criterion_benchmark(c: &mut Criterion) {
     //     veb_maker,
     //     |s, x| VEBOperations::contains(black_box(s), x),
     // );
-    // for_all_widths(c.benchmark_group(format!("next-veb")), veb_maker, |s, x| {
-    //     VEBOperations::next(black_box(s), x)
-    // });
-    // for_all_widths(c.benchmark_group(format!("prev-veb")), veb_maker, |s, x| {
-    //     VEBOperations::prev(black_box(s), x)
-    // });
+    for_all_widths(c.benchmark_group(format!("next-veb")), veb_maker, |s, x| {
+        VEBOperations::next(black_box(s), x)
+    });
+    for_all_widths(c.benchmark_group(format!("prev-veb")), veb_maker, |s, x| {
+        VEBOperations::prev(black_box(s), x)
+    });
 
     for_all_widths(
         c.benchmark_group(format!("insert-btree")),

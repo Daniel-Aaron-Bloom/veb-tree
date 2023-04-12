@@ -195,7 +195,7 @@ where
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {
         if *k.borrow() <= self.min.0 {
-            return None
+            return None;
         }
         let data = match self.data.as_ref() {
             None => return Some((MaybeBorrowed::Borrowed(&self.min.0), &self.min.1)),
@@ -254,9 +254,9 @@ where
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {
         if *k.borrow() <= self.min.0 {
-            return None
+            return None;
         }
-        
+
         let data = match self.data.as_mut() {
             None => return Some((MaybeBorrowed::Borrowed(&self.min.0), &mut self.min.1)),
             Some(data) => data,
@@ -324,53 +324,29 @@ where
     where
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {
-        let (max, summary, children) = match (k.borrow().cmp(&self.min.0), self.data.as_ref()) {
-            (Ordering::Less, _) => {
-                return Some((MaybeBorrowed::Borrowed(&self.min.0), &self.min.1))
-            }
-            (_, None) => return None,
-            (
-                Ordering::Equal,
-                Some(TreeData {
-                    max,
-                    children: None,
-                }),
-            ) => {
-                debug_assert!(*k.borrow() < max.0);
-                return Some((MaybeBorrowed::Borrowed(&max.0), &max.1));
-            }
-            (
-                Ordering::Equal,
-                Some(TreeData {
-                    max: _max,
-                    children: Some((summary, children)),
-                }),
-            ) => {
-                debug_assert!(*k.borrow() < _max.0);
-                let (high, ()) = summary.min_val();
-                let child = children.get(high.borrow()).unwrap();
-                let (low, val) = child.min_val();
-                return Some((
-                    MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
-                    val,
-                ));
-            }
-            (_, Some(data)) if *k.borrow() >= data.max.0 => return None,
-            (
-                _,
-                Some(TreeData {
-                    max,
-                    children: None,
-                }),
-            ) => return Some((MaybeBorrowed::Borrowed(&max.0), &max.1)),
-            (
-                _,
-                Some(TreeData {
-                    max,
-                    children: Some((summary, children)),
-                }),
-            ) => (max, summary, children),
+        if *k.borrow() < self.min.0 {
+            return Some((MaybeBorrowed::Borrowed(&self.min.0), &self.min.1));
+        }
+        let data = match self.data.as_ref() {
+            None => return None,
+            Some(data) => data,
         };
+        if *k.borrow() >= data.max.0 {
+            return None;
+        }
+        let (summary, children) = match data.children.as_ref() {
+            None => return Some((MaybeBorrowed::Borrowed(&data.max.0), &data.max.1)),
+            Some((summary, children)) => (summary, children),
+        };
+        if *k.borrow() == self.min.0 {
+            let (high, ()) = summary.min_val();
+            let child = children.get(high.borrow()).unwrap();
+            let (low, val) = child.min_val();
+            return Some((
+                MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
+                val,
+            ));
+        }
 
         let (high, low) = K::split(k);
 
@@ -394,7 +370,7 @@ where
         }
 
         // If there are no successors to `high`, then use the max value for this node
-        Some((MaybeBorrowed::Borrowed(&max.0), &max.1))
+        Some((MaybeBorrowed::Borrowed(&data.max.0), &data.max.1))
     }
 
     /// O(lg lg K)
@@ -402,53 +378,29 @@ where
     where
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {
-        let (max, summary, children) = match (k.borrow().cmp(&self.min.0), self.data.as_mut()) {
-            (Ordering::Less, _) => {
-                return Some((MaybeBorrowed::Borrowed(&self.min.0), &mut self.min.1))
-            }
-            (_, None) => return None,
-            (
-                Ordering::Equal,
-                Some(TreeData {
-                    max,
-                    children: None,
-                }),
-            ) => {
-                debug_assert!(*k.borrow() < max.0);
-                return Some((MaybeBorrowed::Borrowed(&max.0), &mut max.1));
-            }
-            (
-                Ordering::Equal,
-                Some(TreeData {
-                    max: (_max, _),
-                    children: Some((summary, children)),
-                }),
-            ) => {
-                debug_assert!(k.borrow() < _max);
-                let (high, ()) = summary.min_val();
-                let child = children.get_mut(high.borrow()).unwrap();
-                let (low, val) = child.min_val_mut();
-                return Some((
-                    MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
-                    val,
-                ));
-            }
-            (_, Some(data)) if *k.borrow() >= data.max.0 => return None,
-            (
-                _,
-                Some(TreeData {
-                    max,
-                    children: None,
-                }),
-            ) => return Some((MaybeBorrowed::Borrowed(&max.0), &mut max.1)),
-            (
-                _,
-                Some(TreeData {
-                    max,
-                    children: Some((summary, children)),
-                }),
-            ) => (max, summary, children),
+        if *k.borrow() < self.min.0 {
+            return Some((MaybeBorrowed::Borrowed(&self.min.0), &mut self.min.1));
+        }
+        let data = match self.data.as_mut() {
+            None => return None,
+            Some(data) => data,
         };
+        if *k.borrow() >= data.max.0 {
+            return None;
+        }
+        let (summary, children) = match data.children.as_mut() {
+            None => return Some((MaybeBorrowed::Borrowed(&data.max.0), &mut data.max.1)),
+            Some((summary, children)) => (summary, children),
+        };
+        if *k.borrow() == self.min.0 {
+            let (high, ()) = summary.min_val();
+            let child = children.get_mut(high.borrow()).unwrap();
+            let (low, val) = child.min_val_mut();
+            return Some((
+                MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
+                val,
+            ));
+        }
 
         let (high, low) = K::split(k);
 
@@ -484,7 +436,7 @@ where
         }
 
         // If there are no successors to `high`, then use the max value for this node
-        Some((MaybeBorrowed::Borrowed(&max.0), &mut max.1))
+        Some((MaybeBorrowed::Borrowed(&data.max.0), &mut data.max.1))
     }
 
     /// O(lg lg K)
@@ -560,159 +512,141 @@ where
         if self.min.0 == *k.borrow() {
             return Ok(self.remove_min());
         }
-        return match self.data.take() {
+        
+        let data = match self.data.take() {
             // Monad, but `k` not found
-            None => Err(self),
+            None => return Err(self),
+            Some(data) => data,
+        };
 
+        let (summary, children) = match data.children {
             // No children found max
-            Some(TreeData {
-                max,
-                children: None,
-            }) if max.0 == *k.borrow() => Ok((Some(self), max)),
+            None if data.max.0 == *k.borrow() => return Ok((Some(self), data.max)),
 
             // No children but not max
             // so revert the take
-            Some(TreeData {
-                max,
-                children: None,
-            }) => {
-                self.data = Some(TreeData {
-                    max,
-                    children: None,
-                });
-                Err(self)
+            None => {
+                self.data = Some(data);
+                return Err(self);
             }
-
-            Some(TreeData {
-                max,
-                children: Some((summary, children)),
-            }) if max.0 == *k.borrow() => {
-                // Start by looking for the largest subtree
-                let (high, ()) = summary.max_val();
-                // We should always find an entry, since we're starting from the summary
-                // Try to remove the largest entry from the subtree
-                let (children, (low, val)) =
-                    children.remove_key(high.borrow(), VebTree::remove_max);
-                let high = high.into().0;
-                let new_max = (K::join_lo(high, low), val);
-                // Remove the subtree entirely if it's a monad
-                let children = match children {
-                    None => None,
-                    Some((children, false)) => Some((summary, children)),
-                    Some((children, true)) => Some((summary.remove_max().0.unwrap(), children)),
-                };
-                self.data = Some(TreeData {
-                    max: new_max,
-                    children,
-                });
-                Ok((Some(self), max))
-            }
-
-            Some(TreeData {
-                max,
-                children: Some((summary, children)),
-            }) => {
-                let (high, low) = K::split(k);
-
-                let (children, low) = match children
-                    .maybe_remove_key(high.borrow(), |v| v.remove(low))
-                {
-                    Err(children) => (Some((summary, children)), None),
-                    Ok((None, res)) => (None, Some(res)),
-                    Ok((Some((children, false)), res)) => (Some((summary, children)), Some(res)),
-                    Ok((Some((children, true)), res)) => (
-                        Some((
-                            summary.remove(high.borrow()).ok().unwrap().0.unwrap(),
-                            children,
-                        )),
-                        Some(res),
-                    ),
-                };
-
-                self.data = Some(TreeData { max, children });
-                if let Some((low, val)) = low {
-                    Ok((Some(self), (K::join_lo(high, low), val)))
-                } else {
-                    Err(self)
-                }
-            }
+            Some((summary, children)) => (summary, children),
         };
+
+        if data.max.0 == *k.borrow() {
+            // Start by looking for the largest subtree
+            let (high, ()) = summary.max_val();
+            // We should always find an entry, since we're starting from the summary
+            // Try to remove the largest entry from the subtree
+            let (children, (low, val)) = children.remove_key(high.borrow(), VebTree::remove_max);
+            let high = high.into().0;
+            let new_max = (K::join_lo(high, low), val);
+            // Remove the subtree entirely if it's a monad
+            let children = match children {
+                None => None,
+                Some((children, false)) => Some((summary, children)),
+                Some((children, true)) => Some((summary.remove_max().0.unwrap(), children)),
+            };
+            self.data = Some(TreeData {
+                max: new_max,
+                children,
+            });
+            return Ok((Some(self), data.max));
+        }
+
+        let (high, low) = K::split(k);
+
+        let (children, low) = match children.maybe_remove_key(high.borrow(), |v| v.remove(low)) {
+            Err(children) => (Some((summary, children)), None),
+            Ok((None, res)) => (None, Some(res)),
+            Ok((Some((children, false)), res)) => (Some((summary, children)), Some(res)),
+            Ok((Some((children, true)), res)) => (
+                Some((
+                    summary.remove(high.borrow()).ok().unwrap().0.unwrap(),
+                    children,
+                )),
+                Some(res),
+            ),
+        };
+
+        self.data = Some(TreeData {
+            max: data.max,
+            children,
+        });
+        if let Some((low, val)) = low {
+            Ok((Some(self), (K::join_lo(high, low), val)))
+        } else {
+            Err(self)
+        }
     }
 
     /// O(lg lg K)
     fn remove_min(mut self) -> (Option<Self>, (K, V)) {
-        match self.data.take() {
+        let data = match self.data.take() {
             // No data, return monad
-            None => (None, self.min),
+            None => return (None, self.min),
+            Some(data) => data,
+        };
+
+        let (max, summary, children) = match data.children {
             // Only max, so become monad
-            Some(TreeData {
-                max,
-                children: None,
-            }) => {
-                let r = replace(&mut self.min, max);
-                (Some(self), r)
+            None => {
+                let r = replace(&mut self.min, data.max);
+                return (Some(self), r);
             }
             // Subtree, so extract a new `min` from the subtree
-            Some(TreeData {
-                max,
-                children: Some((summary, children)),
-            }) => {
-                // Start by looking for the smallest subtree
-                let (high, ()) = summary.min_val();
-                // We should always find an entry, since we're starting from the summary
-                // Try to remove the smallest entry from the subtree
-                let (children, (low, val)) =
-                    children.remove_key(high.borrow(), VebTree::remove_min);
-                // Remove the subtree entirely if it's a monad
-                let min = K::join_lo(high.into().0, low);
-                let children = match children {
-                    None => None,
-                    Some((children, false)) => Some((summary, children)),
-                    Some((children, true)) => Some((summary.remove_min().0.unwrap(), children)),
-                };
-                self.data = Some(TreeData { max, children });
-                let r = replace(&mut self.min, (min, val));
-                (Some(self), r)
-            }
-        }
+            Some((summary, children)) => (data.max, summary, children),
+        };
+
+        // Start by looking for the smallest subtree
+        let (high, ()) = summary.min_val();
+        // We should always find an entry, since we're starting from the summary
+        // Try to remove the smallest entry from the subtree
+        let (children, (low, val)) = children.remove_key(high.borrow(), VebTree::remove_min);
+        // Remove the subtree entirely if it's a monad
+        let min = K::join_lo(high.into().0, low);
+        let children = match children {
+            None => None,
+            Some((children, false)) => Some((summary, children)),
+            Some((children, true)) => Some((summary.remove_min().0.unwrap(), children)),
+        };
+        self.data = Some(TreeData { max, children });
+        let r = replace(&mut self.min, (min, val));
+        (Some(self), r)
     }
 
     /// O(lg lg K)
     fn remove_max(mut self) -> (Option<Self>, (K, V)) {
-        match self.data.take() {
+        let data = match self.data.take() {
             // No data, return monad
-            None => (None, self.min),
+            None => return (None, self.min),
+            Some(data) => data,
+        };
+
+        let (max, summary, children) = match data.children {
             // Only max, so become monad
-            Some(TreeData {
-                max,
-                children: None,
-            }) => (Some(self), max),
+            None => return (Some(self), data.max),
             // Subtree, so extract a new `min` from the subtree
-            Some(TreeData {
-                max,
-                children: Some((summary, children)),
-            }) => {
-                // Start by looking for the largest subtree
-                let (high, ()) = summary.max_val();
-                // We should always find an entry, since we're starting from the summary
-                // Try to remove the smallest entry from the subtree
-                let (children, (low, val)) =
-                    children.remove_key(high.borrow(), VebTree::remove_max);
-                let high = high.into().0;
-                let new_max = (K::join_lo(high, low), val);
-                // Remove the subtree entirely if it's a monad
-                let children = match children {
-                    None => None,
-                    Some((children, false)) => Some((summary, children)),
-                    Some((children, true)) => Some((summary.remove_max().0.unwrap(), children)),
-                };
-                self.data = Some(TreeData {
-                    max: new_max,
-                    children,
-                });
-                (Some(self), max)
-            }
-        }
+            Some((summary, children)) => (data.max, summary, children),
+        };
+
+        // Start by looking for the largest subtree
+        let (high, ()) = summary.max_val();
+        // We should always find an entry, since we're starting from the summary
+        // Try to remove the smallest entry from the subtree
+        let (children, (low, val)) = children.remove_key(high.borrow(), VebTree::remove_max);
+        let high = high.into().0;
+        let new_max = (K::join_lo(high, low), val);
+        // Remove the subtree entirely if it's a monad
+        let children = match children {
+            None => None,
+            Some((children, false)) => Some((summary, children)),
+            Some((children, true)) => Some((summary.remove_max().0.unwrap(), children)),
+        };
+        self.data = Some(TreeData {
+            max: new_max,
+            children,
+        });
+        (Some(self), max)
     }
 }
 
