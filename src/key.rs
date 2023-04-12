@@ -529,7 +529,7 @@ impl VebKey for U2 {
     }
 }
 
-impl<T: Clone+Ord> VebKey for [T; 2] {
+impl<T: Clone + Ord> VebKey for [T; 2] {
     type High = T;
     type Low = T;
     type HValue<'a> = &'a T where T: 'a;

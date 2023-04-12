@@ -130,38 +130,22 @@ where
     where
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {
-        let children = match (k.borrow().cmp(&self.min.0), self.data.as_ref()) {
-            (Ordering::Less, _) => return None,
-            (Ordering::Equal, _) => {
-                return Some((MaybeBorrowed::Borrowed(&self.min.0), &self.min.1))
-            }
-            (Ordering::Greater, None) => return None,
-            (
-                Ordering::Greater,
-                Some(TreeData {
-                    max,
-                    children: None,
-                }),
-            ) => {
-                if *k.borrow() == max.0 {
-                    return Some((MaybeBorrowed::Borrowed(&max.0), &max.1));
-                } else {
-                    return None;
-                }
-            }
-            (
-                Ordering::Greater,
-                Some(TreeData {
-                    max,
-                    children: Some((_, children)),
-                }),
-            ) => {
-                if *k.borrow() == max.0 {
-                    return Some((MaybeBorrowed::Borrowed(&max.0), &max.1));
-                } else {
-                    children
-                }
-            }
+        use Ordering::*;
+        match k.borrow().cmp(&self.min.0) {
+            Less => return None,
+            Equal => return Some((MaybeBorrowed::Borrowed(&self.min.0), &self.min.1)),
+            Greater => {}
+        }
+        let data = match self.data.as_ref() {
+            None => return None,
+            Some(data) => data,
+        };
+        if *k.borrow() == data.max.0 {
+            return Some((MaybeBorrowed::Borrowed(&data.max.0), &data.max.1));
+        }
+        let children = match &data.children {
+            None => return None,
+            Some((_, children)) => children,
         };
 
         let (high, low) = K::split(k);
@@ -178,38 +162,22 @@ where
     where
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {
-        let children = match (k.borrow().cmp(&self.min.0), self.data.as_mut()) {
-            (Ordering::Less, _) => return None,
-            (Ordering::Equal, _) => {
-                return Some((MaybeBorrowed::Borrowed(&self.min.0), &mut self.min.1))
-            }
-            (Ordering::Greater, None) => return None,
-            (
-                Ordering::Greater,
-                Some(TreeData {
-                    max,
-                    children: None,
-                }),
-            ) => {
-                if *k.borrow() == max.0 {
-                    return Some((MaybeBorrowed::Borrowed(&max.0), &mut max.1));
-                } else {
-                    return None;
-                }
-            }
-            (
-                Ordering::Greater,
-                Some(TreeData {
-                    max,
-                    children: Some((_, children)),
-                }),
-            ) => {
-                if *k.borrow() == max.0 {
-                    return Some((MaybeBorrowed::Borrowed(&max.0), &mut max.1));
-                } else {
-                    children
-                }
-            }
+        use Ordering::*;
+        match k.borrow().cmp(&self.min.0) {
+            Less => return None,
+            Equal => return Some((MaybeBorrowed::Borrowed(&self.min.0), &mut self.min.1)),
+            Greater => {}
+        }
+        let data = match self.data.as_mut() {
+            None => return None,
+            Some(data) => data,
+        };
+        if *k.borrow() == data.max.0 {
+            return Some((MaybeBorrowed::Borrowed(&data.max.0), &mut data.max.1));
+        }
+        let children = match &mut data.children {
+            None => return None,
+            Some((_, children)) => children,
         };
 
         let (high, low) = K::split(k);
@@ -226,8 +194,10 @@ where
     where
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {
+        if *k.borrow() <= self.min.0 {
+            return None
+        }
         let data = match self.data.as_ref() {
-            None if *k.borrow() <= self.min.0 => return None,
             None => return Some((MaybeBorrowed::Borrowed(&self.min.0), &self.min.1)),
             Some(data) => data,
         };
@@ -236,8 +206,7 @@ where
             (Ordering::Greater, _) => {
                 return Some((MaybeBorrowed::Borrowed(&data.max.0), &data.max.1))
             }
-            (Ordering::Equal, None) => {
-                debug_assert!(*k.borrow() > self.min.0);
+            (_, None) => {
                 return Some((MaybeBorrowed::Borrowed(&self.min.0), &self.min.1));
             }
             (Ordering::Equal, Some((summary, children))) => {
@@ -250,10 +219,6 @@ where
                     MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
                     val,
                 ));
-            }
-            (Ordering::Less, _) if *k.borrow() <= self.min.0 => return None,
-            (Ordering::Less, None) => {
-                return Some((MaybeBorrowed::Borrowed(&self.min.0), &self.min.1));
             }
             (Ordering::Less, Some((summary, children))) => (summary, children),
         };
@@ -288,8 +253,11 @@ where
     where
         Q: Borrow<Self::Key> + Into<Owned<Self::Key>>,
     {
+        if *k.borrow() <= self.min.0 {
+            return None
+        }
+        
         let data = match self.data.as_mut() {
-            None if *k.borrow() <= self.min.0 => return None,
             None => return Some((MaybeBorrowed::Borrowed(&self.min.0), &mut self.min.1)),
             Some(data) => data,
         };
@@ -298,8 +266,7 @@ where
             (Ordering::Greater, _) => {
                 return Some((MaybeBorrowed::Borrowed(&data.max.0), &mut data.max.1))
             }
-            (Ordering::Equal, None) => {
-                debug_assert!(*k.borrow() > self.min.0);
+            (_, None) => {
                 return Some((MaybeBorrowed::Borrowed(&self.min.0), &mut self.min.1));
             }
             (Ordering::Equal, Some((summary, children))) => {
@@ -312,10 +279,6 @@ where
                     MaybeBorrowed::Owned(K::join(high.into().0, low.into().0)),
                     val,
                 ));
-            }
-            (Ordering::Less, _) if *k.borrow() <= self.min.0 => return None,
-            (Ordering::Less, None) => {
-                return Some((MaybeBorrowed::Borrowed(&self.min.0), &mut self.min.1));
             }
             (Ordering::Less, Some((summary, children))) => (summary, children),
         };
@@ -340,7 +303,7 @@ where
             if let Some((low, val)) = low {
                 return Some((MaybeBorrowed::Owned(K::join(high, low.into().0)), val));
             }
-        }
+        };
 
         // If we didn't find it, find the predecessor to `high` in the summary and use the `min` of that node
         if let Some((high, ())) = summary.predecessor(high) {

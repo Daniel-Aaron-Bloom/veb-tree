@@ -27,19 +27,26 @@ type U32Tree = Tree<
 >;
 
 type U64Tree = Tree<
-    u64,    //64
+    u64, //64
     &'static str,
-    TreeMarker< //32
-        TreeMarker< //16
-            ByteSetMarker, ByteMapMarker<VecDequeMarker, ByteSetMarker>,
+    TreeMarker<
+        //32
+        TreeMarker<
+            //16
+            ByteSetMarker,
+            ByteMapMarker<VecDequeMarker, ByteSetMarker>,
         >,
-        HashMapMarker<//16 
+        HashMapMarker<
+            //16
             TreeMarker<ByteSetMarker, ByteMapMarker<VecDequeMarker, ByteSetMarker>>,
         >,
     >,
-    HashMapMarker< // 32
-        TreeMarker< // 16
-            ByteSetMarker, ByteMapMarker<VecDequeMarker, ByteSetMarker>,
+    HashMapMarker<
+        // 32
+        TreeMarker<
+            // 16
+            ByteSetMarker,
+            ByteMapMarker<VecDequeMarker, ByteSetMarker>,
         >,
     >,
 >;
