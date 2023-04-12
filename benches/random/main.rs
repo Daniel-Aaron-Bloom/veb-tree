@@ -26,6 +26,24 @@ type U32Tree = Tree<
     >,
 >;
 
+type U64Tree = Tree<
+    u64,    //64
+    &'static str,
+    TreeMarker< //32
+        TreeMarker< //16
+            ByteSetMarker, ByteMapMarker<VecDequeMarker, ByteSetMarker>,
+        >,
+        HashMapMarker<//16 
+            TreeMarker<ByteSetMarker, ByteMapMarker<VecDequeMarker, ByteSetMarker>>,
+        >,
+    >,
+    HashMapMarker< // 32
+        TreeMarker< // 16
+            ByteSetMarker, ByteMapMarker<VecDequeMarker, ByteSetMarker>,
+        >,
+    >,
+>;
+
 trait VEBOperations {
     fn insert(&mut self, x: u32) -> bool;
     fn remove(&mut self, x: u32) -> bool;
@@ -112,7 +130,7 @@ fn for_all_widths<'a, M: Measurement, Tree, Ret>(
     group.warm_up_time(Duration::from_millis(1000));
     group.measurement_time(Duration::from_millis(2000));
 
-    for bits in 4..=30 {
+    for bits in 27..=30 {
         let capacity = 1 << bits;
         let distr = Uniform::from(0..capacity);
 
@@ -157,48 +175,48 @@ fn criterion_benchmark(c: &mut Criterion) {
         veb_maker,
         |s, x| VEBOperations::insert(black_box(s), x),
     );
-    for_all_widths(
-        c.benchmark_group(format!("remove-veb")),
-        veb_maker,
-        |s, x| VEBOperations::remove(black_box(s), x),
-    );
-    for_all_widths(
-        c.benchmark_group(format!("contains-veb")),
-        veb_maker,
-        |s, x| VEBOperations::contains(black_box(s), x),
-    );
-    for_all_widths(c.benchmark_group(format!("next-veb")), veb_maker, |s, x| {
-        VEBOperations::next(black_box(s), x)
-    });
-    for_all_widths(c.benchmark_group(format!("prev-veb")), veb_maker, |s, x| {
-        VEBOperations::prev(black_box(s), x)
-    });
+    // for_all_widths(
+    //     c.benchmark_group(format!("remove-veb")),
+    //     veb_maker,
+    //     |s, x| VEBOperations::remove(black_box(s), x),
+    // );
+    // for_all_widths(
+    //     c.benchmark_group(format!("contains-veb")),
+    //     veb_maker,
+    //     |s, x| VEBOperations::contains(black_box(s), x),
+    // );
+    // for_all_widths(c.benchmark_group(format!("next-veb")), veb_maker, |s, x| {
+    //     VEBOperations::next(black_box(s), x)
+    // });
+    // for_all_widths(c.benchmark_group(format!("prev-veb")), veb_maker, |s, x| {
+    //     VEBOperations::prev(black_box(s), x)
+    // });
 
     for_all_widths(
         c.benchmark_group(format!("insert-btree")),
         btree_maker,
         |s, x| black_box(s).insert(x),
     );
-    for_all_widths(
-        c.benchmark_group(format!("remove-btree")),
-        btree_maker,
-        |s, x| black_box(s).remove(x),
-    );
-    for_all_widths(
-        c.benchmark_group(format!("contains-btree")),
-        btree_maker,
-        |s, x| black_box(s).contains(x),
-    );
-    for_all_widths(
-        c.benchmark_group(format!("next-btree")),
-        btree_maker,
-        |s, x| black_box(s).next(x),
-    );
-    for_all_widths(
-        c.benchmark_group(format!("prev-btree")),
-        btree_maker,
-        |s, x| black_box(s).prev(x),
-    );
+    // for_all_widths(
+    //     c.benchmark_group(format!("remove-btree")),
+    //     btree_maker,
+    //     |s, x| black_box(s).remove(x),
+    // );
+    // for_all_widths(
+    //     c.benchmark_group(format!("contains-btree")),
+    //     btree_maker,
+    //     |s, x| black_box(s).contains(x),
+    // );
+    // for_all_widths(
+    //     c.benchmark_group(format!("next-btree")),
+    //     btree_maker,
+    //     |s, x| black_box(s).next(x),
+    // );
+    // for_all_widths(
+    //     c.benchmark_group(format!("prev-btree")),
+    //     btree_maker,
+    //     |s, x| black_box(s).prev(x),
+    //);
 }
 
 mod perf;

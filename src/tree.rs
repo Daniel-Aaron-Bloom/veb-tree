@@ -576,7 +576,7 @@ where
                     None
                 }
                 Err((_, None)) => None,
-                Err((high, Some((low, v)))) => Some((K::join(high, low.into()), v)),
+                Err((high, Some((low, v)))) => Some((K::join_lo(high, low), v)),
             };
             data.children = Some((summary, children));
             r
@@ -631,7 +631,7 @@ where
                 let (children, (low, val)) =
                     children.remove_key(high.borrow(), VebTree::remove_max);
                 let high = high.into().0;
-                let new_max = (K::join(high, low.into()), val);
+                let new_max = (K::join_lo(high, low), val);
                 // Remove the subtree entirely if it's a monad
                 let children = match children {
                     None => None,
@@ -668,7 +668,7 @@ where
 
                 self.data = Some(TreeData { max, children });
                 if let Some((low, val)) = low {
-                    Ok((Some(self), (K::join(high, low.into()), val)))
+                    Ok((Some(self), (K::join_lo(high, low), val)))
                 } else {
                     Err(self)
                 }
@@ -701,7 +701,7 @@ where
                 let (children, (low, val)) =
                     children.remove_key(high.borrow(), VebTree::remove_min);
                 // Remove the subtree entirely if it's a monad
-                let min = K::join(high.into().0, low.into());
+                let min = K::join_lo(high.into().0, low);
                 let children = match children {
                     None => None,
                     Some((children, false)) => Some((summary, children)),
@@ -736,7 +736,7 @@ where
                 let (children, (low, val)) =
                     children.remove_key(high.borrow(), VebTree::remove_max);
                 let high = high.into().0;
-                let new_max = (K::join(high, low.into()), val);
+                let new_max = (K::join_lo(high, low), val);
                 // Remove the subtree entirely if it's a monad
                 let children = match children {
                     None => None,
