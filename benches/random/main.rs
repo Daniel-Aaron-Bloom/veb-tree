@@ -10,7 +10,7 @@ use rand::{
 use std::{collections::BTreeSet, time::Duration};
 
 use veb_tree::{
-    bitset::{ByteMapMarker, ByteSetMarker, VecDequeMarker},
+    bitset::{ByteCollectionMarker, ByteSetMarker, VecDequeMarker},
     hash::HashMapMarker,
     tree::{Tree, TreeMarker},
     VebTree,
@@ -19,10 +19,10 @@ use veb_tree::{
 type U32Tree = Tree<
     u32,                                                                     // Key
     (),                                                                      // Value
-    TreeMarker<ByteSetMarker, ByteMapMarker<VecDequeMarker, ByteSetMarker>>, // Summary
+    TreeMarker<ByteSetMarker, ByteCollectionMarker<VecDequeMarker, ByteSetMarker>>, // Summary
     // Children
     HashMapMarker<
-        TreeMarker<ByteSetMarker, ByteMapMarker<VecDequeMarker, ByteSetMarker>>, // Child "tree"
+        TreeMarker<ByteSetMarker, ByteCollectionMarker<VecDequeMarker, ByteSetMarker>>, // Child "tree"
     >,
 >;
 
@@ -34,11 +34,11 @@ type U64Tree = Tree<
         TreeMarker<
             //16
             ByteSetMarker,
-            ByteMapMarker<VecDequeMarker, ByteSetMarker>,
+            ByteCollectionMarker<VecDequeMarker, ByteSetMarker>,
         >,
         HashMapMarker<
             //16
-            TreeMarker<ByteSetMarker, ByteMapMarker<VecDequeMarker, ByteSetMarker>>,
+            TreeMarker<ByteSetMarker, ByteCollectionMarker<VecDequeMarker, ByteSetMarker>>,
         >,
     >,
     HashMapMarker<
@@ -46,7 +46,7 @@ type U64Tree = Tree<
         TreeMarker<
             // 16
             ByteSetMarker,
-            ByteMapMarker<VecDequeMarker, ByteSetMarker>,
+            ByteCollectionMarker<VecDequeMarker, ByteSetMarker>,
         >,
     >,
 >;
@@ -137,7 +137,7 @@ fn for_all_widths<'a, M: Measurement, Tree, Ret>(
     group.warm_up_time(Duration::from_millis(1000));
     group.measurement_time(Duration::from_millis(2000));
 
-    for bits in 27..=30 {
+    for bits in 4..=30 {
         let capacity = 1 << bits;
         let distr = Uniform::from(0..capacity);
 
@@ -177,21 +177,21 @@ fn criterion_benchmark(c: &mut Criterion) {
         s
     };
 
-    // for_all_widths(
-    //     c.benchmark_group(format!("insert-veb")),
-    //     veb_maker,
-    //     |s, x| VEBOperations::insert(black_box(s), x),
-    // );
-    // for_all_widths(
-    //     c.benchmark_group(format!("remove-veb")),
-    //     veb_maker,
-    //     |s, x| VEBOperations::remove(black_box(s), x),
-    // );
-    // for_all_widths(
-    //     c.benchmark_group(format!("contains-veb")),
-    //     veb_maker,
-    //     |s, x| VEBOperations::contains(black_box(s), x),
-    // );
+    for_all_widths(
+        c.benchmark_group(format!("insert-veb")),
+        veb_maker,
+        |s, x| VEBOperations::insert(black_box(s), x),
+    );
+    for_all_widths(
+        c.benchmark_group(format!("remove-veb")),
+        veb_maker,
+        |s, x| VEBOperations::remove(black_box(s), x),
+    );
+    for_all_widths(
+        c.benchmark_group(format!("contains-veb")),
+        veb_maker,
+        |s, x| VEBOperations::contains(black_box(s), x),
+    );
     for_all_widths(c.benchmark_group(format!("next-veb")), veb_maker, |s, x| {
         VEBOperations::next(black_box(s), x)
     });
@@ -204,26 +204,26 @@ fn criterion_benchmark(c: &mut Criterion) {
         btree_maker,
         |s, x| black_box(s).insert(x),
     );
-    // for_all_widths(
-    //     c.benchmark_group(format!("remove-btree")),
-    //     btree_maker,
-    //     |s, x| black_box(s).remove(x),
-    // );
-    // for_all_widths(
-    //     c.benchmark_group(format!("contains-btree")),
-    //     btree_maker,
-    //     |s, x| black_box(s).contains(x),
-    // );
-    // for_all_widths(
-    //     c.benchmark_group(format!("next-btree")),
-    //     btree_maker,
-    //     |s, x| black_box(s).next(x),
-    // );
-    // for_all_widths(
-    //     c.benchmark_group(format!("prev-btree")),
-    //     btree_maker,
-    //     |s, x| black_box(s).prev(x),
-    //);
+    for_all_widths(
+        c.benchmark_group(format!("remove-btree")),
+        btree_maker,
+        |s, x| black_box(s).remove(x),
+    );
+    for_all_widths(
+        c.benchmark_group(format!("contains-btree")),
+        btree_maker,
+        |s, x| black_box(s).contains(x),
+    );
+    for_all_widths(
+        c.benchmark_group(format!("next-btree")),
+        btree_maker,
+        |s, x| black_box(s).next(x),
+    );
+    for_all_widths(
+        c.benchmark_group(format!("prev-btree")),
+        btree_maker,
+        |s, x| black_box(s).prev(x),
+    );
 }
 
 mod perf;

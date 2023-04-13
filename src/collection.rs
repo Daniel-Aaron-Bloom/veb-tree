@@ -54,7 +54,7 @@ pub trait TreeCollection: Sized {
     ///
     /// Otherwise insertion on the existing tree is performed and any pre-existing values
     /// are returned
-    fn insert<Q: Borrow<Self::High> + Into<Owned<Self::High>>>(
+    fn insert_key<Q: Borrow<Self::High> + Into<Owned<Self::High>>>(
         &mut self,
         h: Q,
         vals: CollectionKV<Self>,
@@ -105,7 +105,7 @@ where
         self.get_mut(h)
     }
 
-    fn insert<Q: Borrow<Self::High> + Into<Owned<Self::High>>>(
+    fn insert_key<Q: Borrow<Self::High> + Into<Owned<Self::High>>>(
         &mut self,
         h: Q,
         (l, v): CollectionKV<Self>,

@@ -24,7 +24,7 @@ impl<'a, T: Clone> From<MaybeBorrowed<'a, T>> for Owned<T> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq)]
 pub enum MaybeBorrowed<'a, B> {
     Borrowed(&'a B),
     Owned(B),
@@ -57,10 +57,8 @@ impl<'a, B: Clone> MaybeBorrowed<'a, B> {
             Self::Owned(b) => b,
         }
     }
-
-    pub fn clone(&self) -> B {
-        (**self).clone()
-    }
+}
+impl<'a, B> MaybeBorrowed<'a, B> {
     pub fn borrow(&'a self) -> Self {
         Self::Borrowed(&*self)
     }
@@ -85,265 +83,208 @@ impl<'a, B> Deref for MaybeBorrowed<'a, B> {
 pub trait VebKey: Clone + Ord {
     type High: Clone + Ord;
     type Low: Clone + Ord;
-    type HValue<'a>: Borrow<Self::High> + Into<Owned<Self::High>>
-    where
-        Self: 'a;
-    type LValue<'a>: Borrow<Self::Low> + Into<Owned<Self::Low>>
-    where
-        Self: 'a;
 
-    fn split<'a>(
-        v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
-    ) -> (Self::HValue<'a>, Self::LValue<'a>)
+    fn split<'o, F, R>(_v: MaybeBorrowed<'o, Self>, _f: F) -> R
     where
-        Self: 'a;
-    fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self;
-    fn join_lo(hi: Self::HValue<'_>, lo: Self::Low) -> Self;
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R;
+    fn join<'a>(_hi: MaybeBorrowed<'a, Self::High>, _lo: MaybeBorrowed<'a, Self::Low>) -> Self;
 }
 
 impl VebKey for () {
     type High = ();
     type Low = ();
-    type HValue<'a> = ();
-    type LValue<'a> = ();
-    fn split<'a>(
-        _v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
-    ) -> (Self::HValue<'a>, Self::LValue<'a>)
+    #[inline(always)]
+    fn split<'o, F, R>(_v: MaybeBorrowed<'o, Self>, f: F) -> R
     where
-        Self: 'a,
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
     {
-        (().into(), ().into())
+        use MaybeBorrowed::Owned;
+        f(Owned(()), Owned(()))
     }
-    fn join(_hi: Self::HValue<'_>, _lo: Self::LValue<'_>) -> Self {
-        ()
-    }
-    fn join_lo(_hi: Self::HValue<'_>, _lo: Self::Low) -> Self {
+    #[inline(always)]
+    fn join<'a>(_hi: MaybeBorrowed<'a, Self::High>, _lo: MaybeBorrowed<'a, Self::Low>) -> Self {
         ()
     }
 }
 
 impl VebKey for u128 {
-    type High = u64;
-    type Low = u64;
-    type HValue<'a> = u64;
-    type LValue<'a> = u64;
-    fn split<'a>(
-        v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
-    ) -> (Self::HValue<'a>, Self::LValue<'a>)
+    type High = [u8; 8];
+    type Low = [u8; 8];
+    #[inline(always)]
+    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
     where
-        Self: 'a,
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
     {
-        let Owned(v) = v.into();
-        ((v >> 64) as u64, v as u64)
+        let [hi@.., _, _, _, _, _, _, _, _] = v.to_ne_bytes();
+        let [_, _, _, _, _, _, _, _, lo@..] = v.to_ne_bytes();
+        f(MaybeBorrowed::Owned(hi), MaybeBorrowed::Owned(lo))
     }
-    fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
-        (hi as u128) << 64 | lo as u128
-    }
-    fn join_lo(hi: Self::HValue<'_>, lo: Self::Low) -> Self {
-        (hi as u128) << 64 | lo as u128
+    #[inline(always)]
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::High>, lo: MaybeBorrowed<'a, Self::Low>) -> Self {
+        let ([hi0, hi1, hi2, hi3, hi4, hi5, hi6, hi7], [lo0, lo1, lo2, lo3, lo4, lo5, lo6, lo7]) = (hi.into_or_clone(), lo.into_or_clone());
+        u128::from_ne_bytes([hi0, hi1, hi2, hi3, hi4, hi5, hi6, hi7, lo0, lo1, lo2, lo3, lo4, lo5, lo6, lo7])
     }
 }
 
 impl VebKey for i128 {
-    type High = i64;
-    type Low = i64;
-    type HValue<'a> = i64;
-    type LValue<'a> = i64;
-    fn split<'a>(
-        v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
-    ) -> (Self::HValue<'a>, Self::LValue<'a>)
+    type High = [u8; 8];
+    type Low = [u8; 8];
+    #[inline(always)]
+    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
     where
-        Self: 'a,
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
     {
-        let Owned(v) = v.into();
-        let (lo, hi) = u128::split(v as u128);
-        (lo as i64, hi as i64)
+        let [hi@.., _, _, _, _, _, _, _, _] = v.to_ne_bytes();
+        let [_, _, _, _, _, _, _, _, lo@..] = v.to_ne_bytes();
+        f(MaybeBorrowed::Owned(hi), MaybeBorrowed::Owned(lo))
     }
-    fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
-        u128::join(hi as u64, lo as u64) as i128
-    }
-    fn join_lo(hi: Self::HValue<'_>, lo: Self::Low) -> Self {
-        u128::join(hi as u64, lo as u64) as i128
+    #[inline(always)]
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::High>, lo: MaybeBorrowed<'a, Self::Low>) -> Self {
+        let ([hi0, hi1, hi2, hi3, hi4, hi5, hi6, hi7], [lo0, lo1, lo2, lo3, lo4, lo5, lo6, lo7]) = (hi.into_or_clone(), lo.into_or_clone());
+        i128::from_ne_bytes([hi0, hi1, hi2, hi3, hi4, hi5, hi6, hi7, lo0, lo1, lo2, lo3, lo4, lo5, lo6, lo7])
     }
 }
 
 impl VebKey for u64 {
     type High = u32;
     type Low = u32;
-    type HValue<'a> = u32;
-    type LValue<'a> = u32;
-    fn split<'a>(
-        v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
-    ) -> (Self::HValue<'a>, Self::LValue<'a>)
+    #[inline(always)]
+    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
     where
-        Self: 'a,
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
     {
-        let Owned(v) = v.into();
-        ((v >> 32) as u32, v as u32)
+        use MaybeBorrowed::Owned;
+        let v = v.into_or_clone();
+        f(Owned((v >> 32) as u32), Owned(v as u32))
     }
-    fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
-        (hi as u64) << 32 | lo as u64
-    }
-    fn join_lo(hi: Self::HValue<'_>, lo: Self::Low) -> Self {
-        (hi as u64) << 32 | lo as u64
+    #[inline(always)]
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::High>, lo: MaybeBorrowed<'a, Self::Low>) -> Self {
+        let (hi, lo) = (hi.into_or_clone() as u64, lo.into_or_clone() as u64);
+        hi << 32 | lo
     }
 }
 
 impl VebKey for i64 {
-    type High = i32;
-    type Low = i32;
-    type HValue<'a> = i32;
-    type LValue<'a> = i32;
-    fn split<'a>(
-        v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
-    ) -> (Self::HValue<'a>, Self::LValue<'a>)
+    type High = u32;
+    type Low = u32;
+    #[inline(always)]
+    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
     where
-        Self: 'a,
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
     {
-        let Owned(v) = v.into();
-        let (lo, hi) = u64::split(v as u64);
-        (lo as i32, hi as i32)
+        use MaybeBorrowed::Owned;
+        let v = v.into_or_clone() as u64;
+        u64::split(Owned(v), f)
     }
-    fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
-        u64::join(hi as u32, lo as u32) as i64
-    }
-    fn join_lo(hi: Self::HValue<'_>, lo: Self::Low) -> Self {
-        u64::join(hi as u32, lo as u32) as i64
+    #[inline(always)]
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::High>, lo: MaybeBorrowed<'a, Self::Low>) -> Self {
+        u64::join(hi, lo) as i64
     }
 }
 
 impl VebKey for u32 {
     type High = u16;
     type Low = u16;
-    type HValue<'a> = u16;
-    type LValue<'a> = u16;
-    fn split<'a>(
-        v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
-    ) -> (Self::HValue<'a>, Self::LValue<'a>)
+    #[inline(always)]
+    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
     where
-        Self: 'a,
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
     {
-        let Owned(v) = v.into();
-        ((v >> 16) as u16, v as u16)
+        use MaybeBorrowed::Owned;
+        let v = v.into_or_clone();
+        f(Owned((v >> 16) as u16), Owned(v as u16))
     }
-    fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
-        (hi as u32) << 16 | lo as u32
-    }
-    fn join_lo(hi: Self::HValue<'_>, lo: Self::Low) -> Self {
-        (hi as u32) << 16 | lo as u32
+    #[inline(always)]
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::High>, lo: MaybeBorrowed<'a, Self::Low>) -> Self {
+        let (hi, lo) = (hi.into_or_clone() as u32, lo.into_or_clone() as u32);
+        hi << 16 | lo
     }
 }
 
 impl VebKey for i32 {
-    type High = i16;
-    type Low = i16;
-    type HValue<'a> = i16;
-    type LValue<'a> = i16;
-    fn split<'a>(
-        v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
-    ) -> (Self::HValue<'a>, Self::LValue<'a>)
+    type High = u16;
+    type Low = u16;
+    #[inline(always)]
+    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
     where
-        Self: 'a,
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
     {
-        let Owned(v) = v.into();
-        let (lo, hi) = u32::split(v as u32);
-        (lo as i16, hi as i16)
+        use MaybeBorrowed::Owned;
+        let v = v.into_or_clone() as u32;
+        u32::split(Owned(v), f)
     }
-    fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
-        u32::join(hi as u16, lo as u16) as i32
-    }
-    fn join_lo(hi: Self::HValue<'_>, lo: Self::Low) -> Self {
-        u32::join(hi as u16, lo as u16) as i32
+    #[inline(always)]
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::High>, lo: MaybeBorrowed<'a, Self::Low>) -> Self {
+        u32::join(hi, lo) as i32
     }
 }
 
 impl VebKey for u16 {
     type High = u8;
     type Low = u8;
-    type HValue<'a> = u8;
-    type LValue<'a> = u8;
-    fn split<'a>(
-        v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
-    ) -> (Self::HValue<'a>, Self::LValue<'a>)
+    #[inline(always)]
+    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
     where
-        Self: 'a,
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
     {
-        let Owned(v) = v.into();
-        ((v >> 8) as u8, v as u8)
+        use MaybeBorrowed::Owned;
+        let v = v.into_or_clone();
+        f(Owned((v >> 8) as u8), Owned(v as u8))
     }
-    fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
-        (hi as u16) << 8 | lo as u16
-    }
-    fn join_lo(hi: Self::HValue<'_>, lo: Self::Low) -> Self {
-        (hi as u16) << 8 | lo as u16
+    #[inline(always)]
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::High>, lo: MaybeBorrowed<'a, Self::Low>) -> Self {
+        let (hi, lo) = (hi.into_or_clone() as u16, lo.into_or_clone() as u16);
+        hi << 8 | lo
     }
 }
 
 impl VebKey for i16 {
-    type High = i8;
-    type Low = i8;
-    type HValue<'a> = i8;
-    type LValue<'a> = i8;
-    fn split<'a>(
-        v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
-    ) -> (Self::HValue<'a>, Self::LValue<'a>)
+    type High = u8;
+    type Low = u8;
+    #[inline(always)]
+    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
     where
-        Self: 'a,
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
     {
-        let Owned(v) = v.into();
-        let (lo, hi) = u16::split(v as u16);
-        (lo as i8, hi as i8)
+        use MaybeBorrowed::Owned;
+        let v = v.into_or_clone() as u16;
+        u16::split(Owned(v), f)
     }
-    fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
-        u16::join(hi as u8, lo as u8) as i16
-    }
-    fn join_lo(hi: Self::HValue<'_>, lo: Self::Low) -> Self {
-        u16::join(hi as u8, lo as u8) as i16
+    #[inline(always)]
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::High>, lo: MaybeBorrowed<'a, Self::Low>) -> Self {
+        u16::join(hi, lo) as i16
     }
 }
 
 impl VebKey for u8 {
     type High = U4;
     type Low = U4;
-    type HValue<'a> = U4;
-    type LValue<'a> = U4;
-    fn split<'a>(
-        v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
-    ) -> (Self::HValue<'a>, Self::LValue<'a>)
+    #[inline(always)]
+    fn split<'o, F, R>(_v: MaybeBorrowed<'o, Self>, _f: F) -> R
     where
-        Self: 'a,
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
     {
-        let Owned(v) = v.into();
-        ((v >> 4).into(), v.into())
+        todo!()
     }
-    fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
-        u8::from(hi) << 4 | u8::from(lo)
-    }
-    fn join_lo(hi: Self::HValue<'_>, lo: Self::Low) -> Self {
-        u8::from(hi) << 4 | u8::from(lo)
+    #[inline(always)]
+    fn join<'a>(_hi: MaybeBorrowed<'a, Self::High>, _lo: MaybeBorrowed<'a, Self::Low>) -> Self {
+        todo!()
     }
 }
 
 impl VebKey for i8 {
     type High = I4;
     type Low = I4;
-    type HValue<'a> = I4;
-    type LValue<'a> = I4;
-    fn split<'a>(
-        v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
-    ) -> (Self::HValue<'a>, Self::LValue<'a>)
+    #[inline(always)]
+    fn split<'o, F, R>(_v: MaybeBorrowed<'o, Self>, _f: F) -> R
     where
-        Self: 'a,
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
     {
-        let Owned(v) = v.into();
-        let (lo, hi) = u8::split(v as u8);
-        (lo.into(), hi.into())
+        todo!()
     }
-    fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
-        u8::join(hi.into(), lo.into()) as i8
-    }
-    fn join_lo(hi: Self::HValue<'_>, lo: Self::Low) -> Self {
-        u8::join(hi.into(), lo.into()) as i8
+    #[inline(always)]
+    fn join<'a>(_hi: MaybeBorrowed<'a, Self::High>, _lo: MaybeBorrowed<'a, Self::Low>) -> Self {
+        todo!()
     }
 }
 
@@ -403,45 +344,32 @@ impl From<I4> for U4 {
 impl VebKey for U4 {
     type High = U2;
     type Low = U2;
-    type HValue<'a> = U2;
-    type LValue<'a> = U2;
-    fn split<'a>(
-        v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
-    ) -> (Self::HValue<'a>, Self::LValue<'a>)
+    #[inline(always)]
+    fn split<'o, F, R>(_v: MaybeBorrowed<'o, Self>, _f: F) -> R
     where
-        Self: 'a,
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
     {
-        let Owned(v) = v.into();
-        ((v >> 2).into(), v.into())
+        todo!()
     }
-    fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
-        U4::from(hi) << 2 | U4::from(lo)
-    }
-    fn join_lo(hi: Self::HValue<'_>, lo: Self::Low) -> Self {
-        U4::from(hi) << 2 | U4::from(lo)
+    #[inline(always)]
+    fn join<'a>(_hi: MaybeBorrowed<'a, Self::High>, _lo: MaybeBorrowed<'a, Self::Low>) -> Self {
+        todo!()
     }
 }
 
 impl VebKey for I4 {
     type High = I2;
     type Low = I2;
-    type HValue<'a> = I2;
-    type LValue<'a> = I2;
-    fn split<'a>(
-        v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
-    ) -> (Self::HValue<'a>, Self::LValue<'a>)
+    #[inline(always)]
+    fn split<'o, F, R>(_v: MaybeBorrowed<'o, Self>, _f: F) -> R
     where
-        Self: 'a,
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
     {
-        let Owned(v) = v.into();
-        let (lo, hi) = U4::split(U4::from(v));
-        (lo.into(), hi.into())
+        todo!()
     }
-    fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
-        I4::from(U4::join(hi.into(), lo.into()))
-    }
-    fn join_lo(hi: Self::HValue<'_>, lo: Self::Low) -> Self {
-        I4::from(U4::join(hi.into(), lo.into()))
+    #[inline(always)]
+    fn join<'a>(_hi: MaybeBorrowed<'a, Self::High>, _lo: MaybeBorrowed<'a, Self::Low>) -> Self {
+        todo!()
     }
 }
 
@@ -510,120 +438,166 @@ impl From<I2> for U2 {
 impl VebKey for U2 {
     type High = bool;
     type Low = bool;
-    type HValue<'a> = bool;
-    type LValue<'a> = bool;
-    fn split<'a>(
-        v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
-    ) -> (Self::HValue<'a>, Self::LValue<'a>)
+    #[inline(always)]
+    fn split<'o, F, R>(_v: MaybeBorrowed<'o, Self>, _f: F) -> R
     where
-        Self: 'a,
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
     {
-        let Owned(v) = v.into();
-        (v >> 1 == U2::from(1), v.into())
+        todo!()
     }
-    fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
-        U2::from(hi as u8) << 2 | U2::from(lo as u8)
-    }
-    fn join_lo(hi: Self::HValue<'_>, lo: Self::Low) -> Self {
-        U2::from(hi as u8) << 2 | U2::from(lo as u8)
+    #[inline(always)]
+    fn join<'a>(_hi: MaybeBorrowed<'a, Self::High>, _lo: MaybeBorrowed<'a, Self::Low>) -> Self {
+        todo!()
     }
 }
 
 impl<T: Clone + Ord> VebKey for [T; 2] {
     type High = T;
     type Low = T;
-    type HValue<'a> = &'a T where T: 'a;
-    type LValue<'a> = &'a T where T: 'a;
-    fn split<'a>(
-        v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
-    ) -> (Self::HValue<'a>, Self::LValue<'a>)
+    #[inline(always)]
+    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
     where
-        Self: 'a,
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
     {
-        //let v: &'a Self = v.borrow();
-        //(&v.borrow()[0], &v.borrow()[1])
-        todo!()
+        use MaybeBorrowed::Borrowed;
+        f(Borrowed(&v[0]), Borrowed(&v[1]))
     }
-    fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
-        [hi.clone(), lo.clone()]
-    }
-    fn join_lo(hi: Self::HValue<'_>, lo: Self::Low) -> Self {
-        [hi.clone(), lo]
+    #[inline(always)]
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::High>, lo: MaybeBorrowed<'a, Self::Low>) -> Self {
+        [hi.into_or_clone(), lo.into_or_clone()]
     }
 }
 
-// impl VebKey for [u8; 4] {
-//     type High = [u8; 2];
-//     type Low = [u8; 2];
-//     type HValue<'a> = [u8; 2];
-//     type LValue<'a> = [u8; 2];
-//     fn split<'a>(
-//         v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
-//     ) -> (Self::HValue<'a>, Self::LValue<'a>)
-//     where
-//         Self: 'a,
-//     {
-//         let Owned(v) = v.into();
-//         ([v[0], v[1]], [v[2], v[3]])
-//     }
-//     fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
-//         [hi[0], hi[1], lo[0], lo[1]]
-//     }
-// }
+impl<T: Clone + Ord> VebKey for [T; 3] {
+    type High = T;
+    type Low = [T; 2];
+    #[inline(always)]
+    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
+    where
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
+    {
+        use MaybeBorrowed::Borrowed;
+        let [hi, lo@ ..] = &*v;
+        f(Borrowed(hi), Borrowed(lo))
+    }
+    #[inline(always)]
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::High>, lo: MaybeBorrowed<'a, Self::Low>) -> Self {
+        let (hi, [lo0, lo1]) = (hi.into_or_clone(), lo.into_or_clone());
+        [hi, lo0, lo1]
+    }
+}
+impl<T: Clone + Ord> VebKey for [T; 4] {
+    type High = [T; 2];
+    type Low = [T; 2];
+    #[inline(always)]
+    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
+    where
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
+    {
+        use MaybeBorrowed::Borrowed;
+        let [_, _, lo@ ..] = &*v;
+        let [hi@.., _, _] = &*v;
+        f(Borrowed(hi), Borrowed(lo))
+    }
+    #[inline(always)]
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::High>, lo: MaybeBorrowed<'a, Self::Low>) -> Self {
+        let ([hi0, hi1], [lo0, lo1]) = (hi.into_or_clone(), lo.into_or_clone());
+        [hi0, hi1, lo0, lo1]
+    }
+}
+impl<T: Clone + Ord> VebKey for [T; 5] {
+    type High = [T; 2];
+    type Low = [T; 3];
+    #[inline(always)]
+    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
+    where
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
+    {
+        use MaybeBorrowed::Borrowed;
+        let [_, _, lo@ ..] = &*v;
+        let [hi@.., _, _, _] = &*v;
+        f(Borrowed(hi), Borrowed(lo))
+    }
+    #[inline(always)]
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::High>, lo: MaybeBorrowed<'a, Self::Low>) -> Self {
+        let ([hi0, hi1], [lo0, lo1, lo2]) = (hi.into_or_clone(), lo.into_or_clone());
+        [hi0, hi1, lo0, lo1, lo2]
+    }
+}
+impl<T: Clone + Ord> VebKey for [T; 6] {
+    type High = [T; 3];
+    type Low = [T; 3];
+    #[inline(always)]
+    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
+    where
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
+    {
+        use MaybeBorrowed::Borrowed;
+        let [_, _, _, lo@ ..] = &*v;
+        let [hi@.., _, _, _] = &*v;
+        f(Borrowed(hi), Borrowed(lo))
+    }
+    #[inline(always)]
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::High>, lo: MaybeBorrowed<'a, Self::Low>) -> Self {
+        let ([hi0, hi1, hi2], [lo0, lo1, lo2]) = (hi.into_or_clone(), lo.into_or_clone());
+        [hi0, hi1, hi2, lo0, lo1, lo2]
+    }
+}
+impl<T: Clone + Ord> VebKey for [T; 7] {
+    type High = [T; 3];
+    type Low = [T; 4];
+    #[inline(always)]
+    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
+    where
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
+    {
+        use MaybeBorrowed::Borrowed;
+        let [_, _, _, lo@ ..] = &*v;
+        let [hi@.., _, _, _, _] = &*v;
+        f(Borrowed(hi), Borrowed(lo))
+    }
+    #[inline(always)]
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::High>, lo: MaybeBorrowed<'a, Self::Low>) -> Self {
+        let ([hi0, hi1, hi2], [lo0, lo1, lo2, lo3]) = (hi.into_or_clone(), lo.into_or_clone());
+        [hi0, hi1, hi2, lo0, lo1, lo2, lo3]
+    }
+}
+impl<T: Clone + Ord> VebKey for [T; 8] {
+    type High = [T; 4];
+    type Low = [T; 4];
+    #[inline(always)]
+    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
+    where
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
+    {
+        use MaybeBorrowed::Borrowed;
+        let [_, _, _, _, lo@ ..] = &*v;
+        let [hi@.., _, _, _, _] = &*v;
+        f(Borrowed(hi), Borrowed(lo))
+    }
+    #[inline(always)]
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::High>, lo: MaybeBorrowed<'a, Self::Low>) -> Self {
+        let ([hi0, hi1, hi2, hi3], [lo0, lo1, lo2, lo3]) = (hi.into_or_clone(), lo.into_or_clone());
+        [hi0, hi1, hi2, hi3, lo0, lo1, lo2, lo3]
+    }
+}
+impl<T: Clone + Ord> VebKey for [T; 16] {
+    type High = [T; 8];
+    type Low = [T; 8];
+    #[inline(always)]
+    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
+    where
+        F: FnOnce(MaybeBorrowed<Self::High>, MaybeBorrowed<Self::Low>) -> R,
+    {
+        use MaybeBorrowed::Borrowed;
+        let [_, _, _, _,_, _, _, _, lo@ ..] = &*v;
+        let [hi@.., _, _, _, _, _, _, _, _,] = &*v;
+        f(Borrowed(hi), Borrowed(lo))
+    }
+    #[inline(always)]
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::High>, lo: MaybeBorrowed<'a, Self::Low>) -> Self {
+        let ([hi0, hi1, hi2, hi3, hi4, hi5, hi6, hi7], [lo0, lo1, lo2, lo3, lo4, lo5, lo6, lo7]) = (hi.into_or_clone(), lo.into_or_clone());
+        [hi0, hi1, hi2, hi3, hi4, hi5, hi6, hi7, lo0, lo1, lo2, lo3, lo4, lo5, lo6, lo7]
+    }
+}
 
-// impl VebKey for [i8; 4] {
-//     type High = [i8; 2];
-//     type Low = [i8; 2];
-//     type HValue<'a> = [i8; 2];
-//     type LValue<'a> = [i8; 2];
-//     fn split<'a>(
-//         v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
-//     ) -> (Self::HValue<'a>, Self::LValue<'a>)
-//     where
-//         Self: 'a,
-//     {
-//         let Owned(v) = v.into();
-//         ([v[0], v[1]], [v[2], v[3]])
-//     }
-//     fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
-//         [hi[0], hi[1], lo[0], lo[1]]
-//     }
-// }
-
-// impl VebKey for [u8; 8] {
-//     type High = [u8; 4];
-//     type Low = [u8; 4];
-//     type HValue<'a> = [u8; 4];
-//     type LValue<'a> = [u8; 4];
-//     fn split<'a>(
-//         v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
-//     ) -> (Self::HValue<'a>, Self::LValue<'a>)
-//     where
-//         Self: 'a,
-//     {
-//         let Owned(v) = v.into();
-//         ([v[0], v[1] v[2], v[3]], ([v[4], v[5] v[6], v[7]])
-//     }
-//     fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
-//         [hi[0], hi[1], lo[0], lo[1]]
-//     }
-// }
-
-// impl VebKey for [i8; 8] {
-//     type High = [i8; 4];
-//     type Low = [i8; 4];
-//     type HValue<'a> = [i8; 4];
-//     type LValue<'a> = [i8; 4];
-//     fn split<'a>(
-//         v: impl 'a + Borrow<Self> + Into<Owned<Self>>,
-//     ) -> (Self::HValue<'a>, Self::LValue<'a>)
-//     where
-//         Self: 'a,
-//     {
-//         let Owned(v) = v.into();
-//         ([v[0], v[1]], [v[2], v[3]])
-//     }
-//     fn join(hi: Self::HValue<'_>, lo: Self::LValue<'_>) -> Self {
-//         [hi[0], hi[1], lo[0], lo[1]]
-//     }
-// }
