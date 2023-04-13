@@ -8,6 +8,7 @@ pub mod hash;
 pub mod key;
 pub mod tree;
 
+use alloc::boxed::Box;
 use key::MaybeBorrowed;
 
 /// A shorthand for a kv-pair
@@ -507,5 +508,118 @@ impl<V: VebTree> VebTree for SizedVebTree<V> {
         } else {
             (None, v)
         }
+    }
+}
+
+impl<V: VebTree> VebTree for Box<V> {
+    type Key = V::Key;
+    type Value = V::Value;
+
+    fn from_monad(key: Self::Key, val: Self::Value) -> Self {
+        Box::new(V::from_monad(key, val))
+    }
+
+    fn is_monad(&self) -> bool {
+        (**self).is_monad()
+    }
+
+    fn len_hint(&self) -> (usize, Option<usize>) {
+        (**self).len_hint()
+    }
+
+    fn into_monad(self) -> Result<(Self::Key, Self::Value), Self> {
+        (*self).into_monad().map_err(Box::new)
+    }
+
+    fn min_val(&self) -> (MaybeBorrowed<Self::Key>, &Self::Value) {
+        (**self).min_val()
+    }
+
+    fn min_val_mut(&mut self) -> (MaybeBorrowed<Self::Key>, &mut Self::Value) {
+        (**self).min_val_mut()
+    }
+
+    fn max_val(&self) -> (MaybeBorrowed<Self::Key>, &Self::Value) {
+        (**self).max_val()
+    }
+
+    fn max_val_mut(&mut self) -> (MaybeBorrowed<Self::Key>, &mut Self::Value) {
+        (**self).max_val_mut()
+    }
+
+    fn find<'a, Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    where
+        Q: Into<MaybeBorrowed<'a, Self::Key>>,
+        Self::Key: 'a,
+    {
+        (**self).find(k)
+    }
+
+    fn find_mut<'a, Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    where
+        Q: Into<MaybeBorrowed<'a, Self::Key>>,
+        Self::Key: 'a,
+    {
+        (**self).find_mut(k)
+    }
+
+    fn predecessor<'a, Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    where
+        Q: Into<MaybeBorrowed<'a, Self::Key>>,
+        Self::Key: 'a,
+    {
+        (**self).predecessor(k)
+    }
+
+    fn predecessor_mut<'a, Q>(
+        &mut self,
+        k: Q,
+    ) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    where
+        Q: Into<MaybeBorrowed<'a, Self::Key>>,
+        Self::Key: 'a,
+    {
+        (**self).predecessor_mut(k)
+    }
+
+    fn successor<'a, Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    where
+        Q: Into<MaybeBorrowed<'a, Self::Key>>,
+        Self::Key: 'a,
+    {
+        (**self).successor(k)
+    }
+
+    fn successor_mut<'a, Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    where
+        Q: Into<MaybeBorrowed<'a, Self::Key>>,
+        Self::Key: 'a,
+    {
+        (**self).successor_mut(k)
+    }
+
+    fn insert(&mut self, k: Self::Key, v: Self::Value) -> Option<(Self::Key, Self::Value)> {
+        (**self).insert(k, v)
+    }
+
+    fn remove<'a, Q>(self, k: Q) -> MaybeRemoveResult<Self>
+    where
+        Q: Into<MaybeBorrowed<'a, Self::Key>>,
+        Self::Key: 'a,
+    {
+        match (*self).remove(k) {
+            Ok((tree, r)) => Ok((tree.map(Box::new), r)),
+            Err(tree) => Err(Box::new(tree)),
+        }
+    }
+
+    fn remove_min(self) -> (Option<Self>, (Self::Key, Self::Value)) {
+        let (tree, v) = (*self).remove_min();
+        (tree.map(Box::new), v)
+    }
+
+    fn remove_max(self) -> (Option<Self>, (Self::Key, Self::Value)) {
+        let (tree, v) = (*self).remove_max();
+        (tree.map(Box::new), v)
     }
 }

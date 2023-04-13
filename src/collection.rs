@@ -3,6 +3,7 @@ use core::{
     hash::{BuildHasher, Hash},
 };
 
+use alloc::boxed::Box;
 use hashbrown::HashMap;
 
 use crate::{key::MaybeBorrowed, RemoveResult, TreeKV, VebTree};
@@ -62,7 +63,7 @@ pub trait TreeCollection: Sized {
     ///
     /// Otherwise insertion on the existing tree is performed and any pre-existing values
     /// are returned
-    fn insert_key<'a, Q>(&mut self, h: Q, kv: CollectionKV<Self>) -> TreeInsertResult<'a, Self>
+    fn insert_key<'a, Q>(&mut self, h: Q, lv: CollectionKV<Self>) -> TreeInsertResult<'a, Self>
     where
         Q: Into<MaybeBorrowed<'a, Self::High>>,
         Self::High: 'a;
@@ -185,4 +186,54 @@ where
             (None, true) => unreachable!(),
         }
     }
+}
+
+impl<T: TreeCollection> TreeCollection for Box<T> {
+    type High = T::High;
+    type Tree = T::Tree;
+
+    fn create(h: &Self::High, tree: Self::Tree) -> Self {
+        Box::new(T::create(h, tree))
+    }
+
+    fn get(&self, h: &Self::High) -> Option<&Self::Tree> {
+        (**self).get(h)
+    }
+
+    fn get_mut(&mut self, h: &Self::High) -> Option<&mut Self::Tree>{
+        (**self).get_mut(h)
+    }
+
+    fn insert_key<'a, Q>(&mut self, h: Q, lv: CollectionKV<Self>) -> TreeInsertResult<'a, Self>
+    where
+        Q: Into<MaybeBorrowed<'a, Self::High>>,
+        Self::High: 'a{
+        (**self).insert_key(h, lv)
+    }
+
+    /// Remove a value from a tree contained within.
+    ///
+    /// If the tree containing the value is a monad, it will be removed from
+    /// the collection. If there are no remaning trees the entire collection
+    /// is erased.
+    fn remove_key<'a, Q, R>(self, h: Q, r: R) -> TreeRemoveResult<Self>
+    where
+        Q: Borrow<Self::High>,
+        R: FnOnce(Self::Tree) -> RemoveResult<Self::Tree>{
+            let (t, v) = (*self).remove_key(h, r);
+            (t.map(|(t, b)| (Box::new(t), b)), v)
+        }
+
+    /// Remove a value from a tree contained within.
+    ///
+    /// If the tree containing the value is a monad, it will be removed from
+    /// the collection. If there are no remaning trees the entire collection
+    /// is erased.
+    fn maybe_remove_key<'a, Q, R>(self, h: Q, r: R) -> TreeMaybeRemoveResult<Self>
+    where
+        Q: Borrow<Self::High>,
+        R: FnOnce(Self::Tree) -> MaybeRemoveResult<Self::Tree>{
+            let (t, v) = (*self).maybe_remove_key(h, r).map_err(Box::new)?;
+            Ok((t.map(|(t, b)| (Box::new(t), b)), v))
+        }
 }

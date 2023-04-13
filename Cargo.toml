@@ -18,6 +18,3 @@ harness = false
 
 [lib]
 bench = false
-
-[profile.bench]
-debug = true
