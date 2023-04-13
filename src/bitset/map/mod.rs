@@ -8,7 +8,7 @@ use crate::{
         CollectionKV, TreeCollection, TreeInsertResult, TreeMaybeRemoveResult, TreeRemoveResult,
         VebTreeCollectionMarker,
     },
-    key::{MaybeBorrowed, Owned, VebKey},
+    key::{MaybeBorrowed, VebKey},
     tree::VebTreeMarker,
     MaybeRemoveResult, RemoveResult, TreeKV, VebTree,
 };
@@ -57,11 +57,13 @@ impl<L: list::TreeList> TreeCollection for ByteMap<L> {
         Some(self.list.get_mut(self.set.count_below(*h)))
     }
 
-    fn insert_key<Q>(&mut self, h: Q, (l, v): CollectionKV<Self>) -> TreeInsertResult<Self, Q>
+    fn insert_key<'a, Q>(&mut self, h: Q, (l, v): CollectionKV<Self>) -> TreeInsertResult<'a, Self>
     where
-        Q: Borrow<Self::High> + Into<Owned<Self::High>>,
+        Q: Into<MaybeBorrowed<'a, Self::High>>,
+        Self::High: 'a,
     {
-        let k = *h.borrow();
+        let h = h.into();
+        let k = *h;
         let i = self.set.count_below(k);
         let v = if let Some(_) = self.set.insert(k, ()) {
             Err((h, self.list.get_mut(i).insert(l, v)))

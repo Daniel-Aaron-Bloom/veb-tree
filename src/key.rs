@@ -4,26 +4,6 @@ use core::{
     ops::{BitOr, Shl, Shr},
 };
 
-pub struct Owned<T>(pub T);
-
-impl<T> From<T> for Owned<T> {
-    fn from(t: T) -> Self {
-        Owned(t)
-    }
-}
-
-impl<'a, T: Clone> From<&'a T> for Owned<T> {
-    fn from(t: &'a T) -> Self {
-        Owned(t.clone())
-    }
-}
-
-impl<'a, T: Clone> From<MaybeBorrowed<'a, T>> for Owned<T> {
-    fn from(t: MaybeBorrowed<'a, T>) -> Self {
-        Owned(t.into_or_clone())
-    }
-}
-
 #[derive(Clone, Copy, Debug, Eq)]
 pub enum MaybeBorrowed<'a, B> {
     Borrowed(&'a B),

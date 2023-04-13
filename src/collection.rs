@@ -5,8 +5,11 @@ use core::{
 
 use hashbrown::HashMap;
 
-use crate::{key::Owned, RemoveResult, TreeKV, VebTree};
 use crate::{key::VebKey, MaybeRemoveResult};
+use crate::{
+    key::{MaybeBorrowed},
+    RemoveResult, TreeKV, VebTree,
+};
 
 /// A marker trait to help with associated type bounds
 pub trait SuperTreeCollection<K: VebKey, V> {
@@ -29,8 +32,13 @@ pub trait VebTreeCollectionMarker<K: VebKey, V> {
 
 pub type CollectionKV<TC> = TreeKV<<TC as TreeCollection>::Tree>;
 
-pub type TreeInsertResult<TC, Q> =
-    Result<<TC as TreeCollection>::High, (Q, Option<CollectionKV<TC>>)>;
+pub type TreeInsertResult<'a, TC> = Result<
+    <TC as TreeCollection>::High,
+    (
+        MaybeBorrowed<'a, <TC as TreeCollection>::High>,
+        Option<CollectionKV<TC>>,
+    ),
+>;
 pub type TreeRemoveResult<TC> = (Option<(TC, bool)>, CollectionKV<TC>);
 pub type TreeMaybeRemoveResult<TC> = Result<TreeRemoveResult<TC>, TC>;
 
@@ -57,9 +65,10 @@ pub trait TreeCollection: Sized {
     ///
     /// Otherwise insertion on the existing tree is performed and any pre-existing values
     /// are returned
-    fn insert_key<Q>(&mut self, h: Q, kv: CollectionKV<Self>) -> TreeInsertResult<Self, Q>
+    fn insert_key<'a, Q>(&mut self, h: Q, kv: CollectionKV<Self>) -> TreeInsertResult<'a, Self>
     where
-        Q: Borrow<Self::High> + Into<Owned<Self::High>>;
+        Q: Into<MaybeBorrowed<'a, Self::High>>,
+        Self::High: 'a;
 
     /// Remove a value from a tree contained within.
     ///
@@ -106,14 +115,19 @@ where
         self.get_mut(h)
     }
 
-    fn insert_key<Q>(&mut self, h: Q, (l, v): CollectionKV<Self>) -> TreeInsertResult<Self, Q>
+    fn insert_key<'a, Q>(&mut self, h: Q, (l, v): CollectionKV<Self>) -> TreeInsertResult<'a, Self>
     where
-        Q: Borrow<Self::High> + Into<Owned<Self::High>>,
+        Q: Into<MaybeBorrowed<'a, Self::High>>,
+        Self::High: 'a,
     {
+        let h = h.into();
         use hashbrown::hash_map::RawEntryMut;
-        let mut entry = match self.raw_entry_mut().from_key(h.borrow()) {
+        let mut entry = match self.raw_entry_mut().from_key(&*h) {
             RawEntryMut::Vacant(entry) => {
-                return Ok(entry.insert(h.into().0, V::from_monad(l, v)).0.clone())
+                return Ok(entry
+                    .insert(h.into_or_clone(), V::from_monad(l, v))
+                    .0
+                    .clone())
             }
             RawEntryMut::Occupied(entry) => entry,
         };
