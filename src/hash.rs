@@ -1,16 +1,10 @@
-use core::{
-    hash::{BuildHasher, Hash},
-};
+use core::hash::{BuildHasher, Hash};
 
 use ghost::phantom;
 use hashbrown::hash_map::DefaultHashBuilder;
 use hashbrown::HashMap;
 
-use crate::{
-    collection::VebTreeCollectionMarker,
-    key::{VebKey},
-    tree::VebTreeMarker,
-};
+use crate::{collection::VebTreeCollectionMarker, key::VebKey, tree::VebTreeMarker};
 
 #[phantom]
 pub struct HashMapMarker<#[invariant] Tree = (), #[invariant] S = DefaultHashBuilder>;

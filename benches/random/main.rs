@@ -17,8 +17,8 @@ use veb_tree::{
 };
 //VebTree
 type U32Tree = Tree<
-    u32,                                                                     // Key
-    (),                                                                      // Value
+    u32,                                                                            // Key
+    (),                                                                             // Value
     TreeMarker<ByteSetMarker, ByteCollectionMarker<VecDequeMarker, ByteSetMarker>>, // Summary
     // Children
     HashMapMarker<

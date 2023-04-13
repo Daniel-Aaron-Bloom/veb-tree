@@ -1,7 +1,7 @@
-mod set;
 mod map;
+mod set;
 
+pub use map::{ByteCollectionMarker, ByteMap, ByteTreeMarker};
 pub use set::{ByteSet, ByteSetMarker};
-pub use map::{ByteMap, ByteCollectionMarker, ByteTreeMarker};
 
-pub use map::list::{TreeList, TreeListMarker, List, ListMarker, VecDequeMarker};
+pub use map::list::{List, ListMarker, TreeList, TreeListMarker, VecDequeMarker};

@@ -28,6 +28,9 @@ pub trait VebTreeCollectionMarker<K: VebKey, V> {
 }
 
 pub type CollectionKV<TC> = TreeKV<<TC as TreeCollection>::Tree>;
+
+pub type TreeInsertResult<TC, Q> =
+    Result<<TC as TreeCollection>::High, (Q, Option<CollectionKV<TC>>)>;
 pub type TreeRemoveResult<TC> = (Option<(TC, bool)>, CollectionKV<TC>);
 pub type TreeMaybeRemoveResult<TC> = Result<TreeRemoveResult<TC>, TC>;
 
@@ -54,11 +57,9 @@ pub trait TreeCollection: Sized {
     ///
     /// Otherwise insertion on the existing tree is performed and any pre-existing values
     /// are returned
-    fn insert_key<Q: Borrow<Self::High> + Into<Owned<Self::High>>>(
-        &mut self,
-        h: Q,
-        vals: CollectionKV<Self>,
-    ) -> Result<Self::High, (Q, Option<CollectionKV<Self>>)>;
+    fn insert_key<Q>(&mut self, h: Q, kv: CollectionKV<Self>) -> TreeInsertResult<Self, Q>
+    where
+        Q: Borrow<Self::High> + Into<Owned<Self::High>>;
 
     /// Remove a value from a tree contained within.
     ///
@@ -105,11 +106,10 @@ where
         self.get_mut(h)
     }
 
-    fn insert_key<Q: Borrow<Self::High> + Into<Owned<Self::High>>>(
-        &mut self,
-        h: Q,
-        (l, v): CollectionKV<Self>,
-    ) -> Result<Self::High, (Q, Option<CollectionKV<Self>>)> {
+    fn insert_key<Q>(&mut self, h: Q, (l, v): CollectionKV<Self>) -> TreeInsertResult<Self, Q>
+    where
+        Q: Borrow<Self::High> + Into<Owned<Self::High>>,
+    {
         use hashbrown::hash_map::RawEntryMut;
         let mut entry = match self.raw_entry_mut().from_key(h.borrow()) {
             RawEntryMut::Vacant(entry) => {

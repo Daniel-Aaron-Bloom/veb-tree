@@ -8,7 +8,7 @@ pub mod hash;
 pub mod key;
 pub mod tree;
 
-use key::{MaybeBorrowed};
+use key::MaybeBorrowed;
 
 /// A shorthand for a kv-pair
 pub type TreeKV<VT> = (<VT as VebTree>::Key, <VT as VebTree>::Value);
@@ -105,7 +105,10 @@ pub trait VebTree: Sized {
     /// Find the predecessor to a key, if the tree contains such a value.
     ///
     /// Complexity is expected to be `O(lg lg K)`.
-    fn predecessor_mut<'a, Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn predecessor_mut<'a, Q>(
+        &mut self,
+        k: Q,
+    ) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
     where
         Q: Into<MaybeBorrowed<'a, Self::Key>>,
         Self::Key: 'a;
@@ -121,7 +124,10 @@ pub trait VebTree: Sized {
     /// Find the predecessor to a key, if the tree contains such a value.
     ///
     /// Complexity is expected to be `O(lg lg K)`.
-    fn successor_mut<'a, Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn successor_mut<'a, Q>(
+        &mut self,
+        k: Q,
+    ) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
     where
         Q: Into<MaybeBorrowed<'a, Self::Key>>,
         Self::Key: 'a;
@@ -184,7 +190,9 @@ impl<'a, V: VebTree> From<&'a V> for Iter<'a, V> {
 }
 
 impl<'a, V: VebTree> Iterator for Iter<'a, V>
-where V::Key: Clone {
+where
+    V::Key: Clone,
+{
     type Item = (MaybeBorrowed<'a, V::Key>, &'a V::Value);
     fn next(&mut self) -> Option<Self::Item> {
         use IterData::*;
@@ -268,8 +276,10 @@ where V::Key: Clone {
     }
 }
 
-impl<'a, V: VebTree> DoubleEndedIterator for Iter<'a, V> 
-where V::Key: Clone {
+impl<'a, V: VebTree> DoubleEndedIterator for Iter<'a, V>
+where
+    V::Key: Clone,
+{
     fn next_back(&mut self) -> Option<Self::Item> {
         use IterData::*;
         let v = match self.data.take()? {
@@ -337,8 +347,7 @@ where V::Key: Clone {
     }
 }
 
-impl<'a, V: VebTree> ExactSizeIterator for Iter<'a, SizedVebTree<V>>
-where V::Key: Clone  {}
+impl<'a, V: VebTree> ExactSizeIterator for Iter<'a, SizedVebTree<V>> where V::Key: Clone {}
 
 /// A [`VebTree`] that memorizes it's size
 pub struct SizedVebTree<V> {
@@ -419,15 +428,18 @@ impl<V: VebTree> VebTree for SizedVebTree<V> {
     fn predecessor<'a, Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
     where
         Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a
+        Self::Key: 'a,
     {
         self.tree.predecessor(k)
     }
 
-    fn predecessor_mut<'a, Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn predecessor_mut<'a, Q>(
+        &mut self,
+        k: Q,
+    ) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
     where
         Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a
+        Self::Key: 'a,
     {
         self.tree.predecessor_mut(k)
     }
@@ -435,7 +447,7 @@ impl<V: VebTree> VebTree for SizedVebTree<V> {
     fn successor<'a, Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
     where
         Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a
+        Self::Key: 'a,
     {
         self.tree.successor(k)
     }
@@ -443,13 +455,12 @@ impl<V: VebTree> VebTree for SizedVebTree<V> {
     fn successor_mut<'a, Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
     where
         Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a
+        Self::Key: 'a,
     {
         self.tree.successor_mut(k)
     }
 
-    fn insert(&mut self, k: Self::Key, v: Self::Value) -> Option<(Self::Key, Self::Value)>
-    {
+    fn insert(&mut self, k: Self::Key, v: Self::Value) -> Option<(Self::Key, Self::Value)> {
         let v = self.tree.insert(k, v);
         if v.is_none() {
             self.size += 1;
@@ -460,7 +471,7 @@ impl<V: VebTree> VebTree for SizedVebTree<V> {
     fn remove<'a, Q>(mut self, k: Q) -> MaybeRemoveResult<Self>
     where
         Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a
+        Self::Key: 'a,
     {
         match self.tree.remove(k) {
             Ok((Some(tree), r)) => {

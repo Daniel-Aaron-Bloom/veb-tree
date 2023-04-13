@@ -88,7 +88,8 @@ where
 
     /// O(1)
     fn max_val(&self) -> (MaybeBorrowed<K>, &V) {
-        let (k, v) = self.data
+        let (k, v) = self
+            .data
             .as_ref()
             .map(|data| (&data.max.0, &data.max.1))
             .unwrap_or((&self.min.0, &self.min.1));
@@ -97,7 +98,8 @@ where
 
     /// O(1)
     fn max_val_mut(&mut self) -> (MaybeBorrowed<K>, &mut V) {
-        let (k, v) = self.data
+        let (k, v) = self
+            .data
             .as_mut()
             .map(|data| (&data.max.0, &mut data.max.1))
             .unwrap_or((&self.min.0, &mut self.min.1));
@@ -176,7 +178,7 @@ where
     fn predecessor<'a, Q>(&self, k: Q) -> Option<(MaybeBorrowed<K>, &V)>
     where
         Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a
+        Self::Key: 'a,
     {
         let k = k.into();
         if *k.borrow() <= self.min.0 {
@@ -227,8 +229,8 @@ where
     /// O(lg lg K)
     fn predecessor_mut<'a, Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<K>, &mut V)>
     where
-    Q: Into<MaybeBorrowed<'a, Self::Key>>,
-    Self::Key: 'a
+        Q: Into<MaybeBorrowed<'a, Self::Key>>,
+        Self::Key: 'a,
     {
         let k = k.into();
         if *k.borrow() <= self.min.0 {
@@ -295,8 +297,8 @@ where
     /// O(lg lg K)
     fn successor<'a, Q>(&self, k: Q) -> Option<(MaybeBorrowed<K>, &V)>
     where
-    Q: Into<MaybeBorrowed<'a, Self::Key>>,
-    Self::Key: 'a
+        Q: Into<MaybeBorrowed<'a, Self::Key>>,
+        Self::Key: 'a,
     {
         let k = k.into();
         if *k.borrow() < self.min.0 {
@@ -344,8 +346,8 @@ where
     /// O(lg lg K)
     fn successor_mut<'a, Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<K>, &mut V)>
     where
-    Q: Into<MaybeBorrowed<'a, Self::Key>>,
-    Self::Key: 'a
+        Q: Into<MaybeBorrowed<'a, Self::Key>>,
+        Self::Key: 'a,
     {
         let k = k.into();
         if *k.borrow() < self.min.0 {
@@ -471,8 +473,8 @@ where
     /// O(lg lg K)
     fn remove<'a, Q>(mut self, k: Q) -> Result<(Option<Self>, (Self::Key, Self::Value)), Self>
     where
-    Q: Into<MaybeBorrowed<'a, Self::Key>>,
-    Self::Key: 'a
+        Q: Into<MaybeBorrowed<'a, Self::Key>>,
+        Self::Key: 'a,
     {
         let k = k.into();
         if self.min.0 == *k.borrow() {
@@ -616,7 +618,11 @@ mod test {
     use core::fmt;
 
     use crate::{
-        bitset::{ByteSetMarker, ByteCollectionMarker, VecDequeMarker, ByteTreeMarker}, hash::HashMapMarker, key::MaybeBorrowed, tree::TreeMarker, VebTree,
+        bitset::{ByteCollectionMarker, ByteSetMarker, ByteTreeMarker, VecDequeMarker},
+        hash::HashMapMarker,
+        key::MaybeBorrowed,
+        tree::TreeMarker,
+        VebTree,
     };
 
     use super::Tree;
@@ -690,9 +696,7 @@ mod test {
             &'static str,  // Value
             ByteSetMarker, // Summary
             // Children
-            ByteCollectionMarker<VecDequeMarker,
-                ByteTreeMarker<VecDequeMarker>
-            >,
+            ByteCollectionMarker<VecDequeMarker, ByteTreeMarker<VecDequeMarker>>,
         >;
         let mut v = U16Tree::from_monad(10, "a");
 

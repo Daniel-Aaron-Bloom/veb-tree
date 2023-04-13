@@ -1,13 +1,8 @@
-
-use core::{
-    mem::forget,
-};
+use core::mem::forget;
 
 use alloc::collections::VecDeque;
 
-use crate::{
-    MaybeRemoveResult, RemoveResult, TreeKV, VebTree,
-};
+use crate::{MaybeRemoveResult, RemoveResult, TreeKV, VebTree};
 
 pub struct VecDequeMarker;
 
@@ -157,9 +152,8 @@ impl<V> List for VecDeque<V> {
     fn get(&self, i: usize) -> &Self::Value {
         &self[i]
     }
-    fn get_mut(&mut self, i: usize) -> &mut Self::Value{
+    fn get_mut(&mut self, i: usize) -> &mut Self::Value {
         &mut self[i]
-
     }
     fn insert_value(&mut self, i: usize, v: Self::Value) {
         self.insert(i, v)
