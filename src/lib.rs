@@ -1,12 +1,13 @@
 #![no_std]
+#![recursion_limit = "256"]
 
 extern crate alloc;
 
 pub mod bitset;
 pub mod collection;
-pub mod hash;
 pub mod key;
 pub mod tree;
+pub mod markers;
 
 use alloc::boxed::Box;
 use key::MaybeBorrowed;

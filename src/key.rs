@@ -4,6 +4,8 @@ use core::{
     ops::{BitOr, Shl, Shr},
 };
 
+use typenum::{Unsigned, op, U1, U128, U64, U32, U16, U8};
+
 #[derive(Clone, Copy, Debug, Eq)]
 pub enum MaybeBorrowed<'a, B> {
     Borrowed(&'a B),
@@ -72,6 +74,7 @@ pub trait VebKey: Clone + Ord {
 
 pub trait SizedVebKey {
     const CARDINALITY: usize;
+    type Cardinality: Unsigned;
     fn index(&self) -> usize;
 }
 
@@ -93,6 +96,7 @@ impl VebKey for () {
 }
 impl SizedVebKey for () {
     const CARDINALITY: usize = 1;
+    type Cardinality = typenum::U1;
     fn index(&self) -> usize {
         0
     }
@@ -122,6 +126,7 @@ impl SizedVebKey for u128 {
     } else {
         panic!("u128 is not sized on this platform")
     };
+    type Cardinality = op!(U1 << U128);
     #[inline(always)]
     fn index(&self) -> usize {
         *self as usize
@@ -151,6 +156,7 @@ impl SizedVebKey for i128 {
     } else {
         panic!("i128 is not sized on this platform")
     };
+    type Cardinality = op!(U1 << U128);
     #[inline(always)]
     fn index(&self) -> usize {
         *self as usize
@@ -181,6 +187,7 @@ impl SizedVebKey for u64 {
     } else {
         panic!("u64 is not sized on this platform")
     };
+    type Cardinality = op!(U1 << U64);
     #[inline(always)]
     fn index(&self) -> usize {
         *self as usize
@@ -211,6 +218,7 @@ impl SizedVebKey for i64 {
     } else {
         panic!("i64 is not sized on this platform")
     };
+    type Cardinality = op!(U1 << U64);
     #[inline(always)]
     fn index(&self) -> usize {
         *self as usize
@@ -241,6 +249,7 @@ impl SizedVebKey for u32 {
     } else {
         panic!("u32 is not sized on this platform")
     };
+    type Cardinality = op!(U1 << U32);
     #[inline(always)]
     fn index(&self) -> usize {
         *self as usize
@@ -270,6 +279,7 @@ impl SizedVebKey for i32 {
     } else {
         panic!("i32 is not sized on this platform")
     };
+    type Cardinality = op!(U1 << U32);
     #[inline(always)]
     fn index(&self) -> usize {
         *self as usize
@@ -300,6 +310,7 @@ impl SizedVebKey for u16 {
     } else {
         panic!("u16 is not sized on this platform")
     };
+    type Cardinality = op!(U1 << U16);
     #[inline(always)]
     fn index(&self) -> usize {
         *self as usize
@@ -329,6 +340,7 @@ impl SizedVebKey for i16 {
     } else {
         panic!("i16 is not sized on this platform")
     };
+    type Cardinality = op!(U1 << U16);
     #[inline(always)]
     fn index(&self) -> usize {
         *self as usize
@@ -356,6 +368,7 @@ impl SizedVebKey for u8 {
     } else {
         panic!("u8 is not sized on this platform")
     };
+    type Cardinality = op!(U1 << U8);
     #[inline(always)]
     fn index(&self) -> usize {
         *self as usize
@@ -383,6 +396,7 @@ impl SizedVebKey for i8 {
     } else {
         panic!("i8 is not sized on this platform")
     };
+    type Cardinality = op!(U1 << U8);
     #[inline(always)]
     fn index(&self) -> usize {
         *self as usize

@@ -11,10 +11,12 @@ use std::{collections::BTreeSet, time::Duration};
 
 use veb_tree::{
     bitset::{ByteCollectionMarker, ByteSetMarker, VecDequeMarker},
-    collection::ArrayTreeCollectionMarker,
-    hash::HashMapMarker,
+    collection::{
+        array::{ArrayTreeCollectionMarker, GenericArrayMarker},
+        hash::HashMapMarker,
+    },
     tree::{Tree, TreeMarker},
-    VebTree,
+    VebTree, markers::{BoxMarker, VebTreeType},
 };
 // //VebTree
 // type U32Tree = Tree<
@@ -26,39 +28,34 @@ use veb_tree::{
 //         TreeMarker<ByteSetMarker, ByteCollectionMarker<VecDequeMarker, ByteSetMarker>>, // Child "tree"
 //     >,
 // >;
-type U32Tree = Tree<
+// type U32Tree = Tree<
+//     u32,                                                                            // Key
+//     (),                                                                             // Value
+//     TreeMarker<ByteSetMarker, ArrayTreeCollectionMarker<BoxMarker<ByteSetMarker>>>, // Summary
+//     // Children
+//     ArrayTreeCollectionMarker<BoxMarker<
+//         TreeMarker<ByteSetMarker, ArrayTreeCollectionMarker<BoxMarker<ByteSetMarker>>>, // Child "tree"
+//     >>,
+// >;
+
+type U32Marker = TreeMarker<
+    TreeMarker<ByteSetMarker, ArrayTreeCollectionMarker<BoxMarker<ByteSetMarker>>>, // Summary
+    // Children
+    ArrayTreeCollectionMarker<BoxMarker<
+        TreeMarker<ByteSetMarker, ArrayTreeCollectionMarker<BoxMarker<ByteSetMarker>>>, // Child "tree"
+    >>,
+>;
+type U32Tree = VebTreeType<
     u32,                                                                            // Key
     (),                                                                             // Value
-    TreeMarker<ByteSetMarker, ArrayTreeCollectionMarker<ByteSetMarker>>, // Summary
-    // Children
-    ArrayTreeCollectionMarker<
-        TreeMarker<ByteSetMarker, ArrayTreeCollectionMarker<ByteSetMarker>>, // Child "tree"
-    >,
+    U32Marker
 >;
 
-type U64Tree = Tree<
+pub type U64Tree = Tree<
     u64, //64
     &'static str,
-    TreeMarker<
-        //32
-        TreeMarker<
-            //16
-            ByteSetMarker,
-            ByteCollectionMarker<VecDequeMarker, ByteSetMarker>,
-        >,
-        HashMapMarker<
-            //16
-            TreeMarker<ByteSetMarker, ByteCollectionMarker<VecDequeMarker, ByteSetMarker>>,
-        >,
-    >,
-    HashMapMarker<
-        // 32
-        TreeMarker<
-            // 16
-            ByteSetMarker,
-            ByteCollectionMarker<VecDequeMarker, ByteSetMarker>,
-        >,
-    >,
+    U32Tree,
+    HashMapMarker<U32Tree>,
 >;
 
 trait VEBOperations {
@@ -147,7 +144,7 @@ fn for_all_widths<'a, M: Measurement, Tree, Ret>(
     group.warm_up_time(Duration::from_millis(1000));
     group.measurement_time(Duration::from_millis(2000));
 
-    for bits in 27..=30 {
+    for bits in 4..=30 {
         let capacity = 1 << bits;
         let distr = Uniform::from(0..capacity);
 
