@@ -6,8 +6,8 @@ extern crate alloc;
 pub mod bitset;
 pub mod collection;
 pub mod key;
-pub mod tree;
 pub mod markers;
+pub mod tree;
 
 use alloc::boxed::Box;
 use key::MaybeBorrowed;

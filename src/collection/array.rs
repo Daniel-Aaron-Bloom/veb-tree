@@ -4,7 +4,7 @@ use core::{borrow::Borrow, marker::PhantomData};
 use alloc::{boxed::Box, vec::Vec};
 use generic_array::{ArrayLength, GenericArray};
 use ghost::phantom;
-use typenum::{Unsigned};
+use typenum::Unsigned;
 
 use crate::markers::BoxMarker;
 use crate::tree::VebTreeMarker;
@@ -14,7 +14,10 @@ use crate::{
     RemoveResult, VebTree,
 };
 
-use super::{VebTreeCollectionMarker, TreeCollection, TreeRemoveResult, TreeMaybeRemoveResult, CollectionKV, TreeInsertResult};
+use super::{
+    CollectionKV, TreeCollection, TreeInsertResult, TreeMaybeRemoveResult, TreeRemoveResult,
+    VebTreeCollectionMarker,
+};
 
 #[phantom]
 pub struct ArrayTreeCollectionMarker<#[invariant] Array>;
@@ -24,7 +27,8 @@ where
     K: VebKey,
     K::Hi: SizedVebKey,
     A: ArrayMarker<K::Hi, V>,
-    <A::Array as OptionArray<<K::Hi as SizedVebKey>::Cardinality>>::V: VebTree<Key = K::Lo, Value = V>,
+    <A::Array as OptionArray<<K::Hi as SizedVebKey>::Cardinality>>::V:
+        VebTree<Key = K::Lo, Value = V>,
 {
     type TreeCollection = ArrayTreeCollection<K::Hi, A::Array>;
 }
@@ -63,11 +67,15 @@ impl<V: VebTree, Cardinality: Unsigned> OptionArray<Cardinality> for Box<[Option
 pub struct GenericArrayMarker<#[invariant] T>;
 
 impl<K: SizedVebKey, V, Tree: VebTreeMarker<K, V>> ArrayMarker<K, V> for GenericArrayMarker<Tree>
-where K::Cardinality: ArrayLength<Option<Tree::Tree>> {
+where
+    K::Cardinality: ArrayLength<Option<Tree::Tree>>,
+{
     type Array = GenericArray<Option<Tree::Tree>, K::Cardinality>;
 }
 
-impl<V: VebTree, Cardinality: ArrayLength<Option<V>>> OptionArray<Cardinality> for GenericArray<Option<V>, Cardinality> {
+impl<V: VebTree, Cardinality: ArrayLength<Option<V>>> OptionArray<Cardinality>
+    for GenericArray<Option<V>, Cardinality>
+{
     type V = V;
     fn create() -> Self {
         Self::from_exact_iter(repeat_with(|| None).take(Cardinality::USIZE)).unwrap()

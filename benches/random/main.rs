@@ -15,8 +15,9 @@ use veb_tree::{
         array::{ArrayTreeCollectionMarker, GenericArrayMarker},
         hash::HashMapMarker,
     },
+    markers::{BoxMarker, VebTreeType},
     tree::{Tree, TreeMarker},
-    VebTree, markers::{BoxMarker, VebTreeType},
+    VebTree,
 };
 // //VebTree
 // type U32Tree = Tree<
@@ -41,14 +42,16 @@ use veb_tree::{
 type U32Marker = TreeMarker<
     TreeMarker<ByteSetMarker, ArrayTreeCollectionMarker<BoxMarker<ByteSetMarker>>>, // Summary
     // Children
-    ArrayTreeCollectionMarker<BoxMarker<
-        TreeMarker<ByteSetMarker, ArrayTreeCollectionMarker<BoxMarker<ByteSetMarker>>>, // Child "tree"
-    >>,
+    ArrayTreeCollectionMarker<
+        BoxMarker<
+            TreeMarker<ByteSetMarker, ArrayTreeCollectionMarker<BoxMarker<ByteSetMarker>>>, // Child "tree"
+        >,
+    >,
 >;
 type U32Tree = VebTreeType<
-    u32,                                                                            // Key
-    (),                                                                             // Value
-    U32Marker
+    u32, // Key
+    (),  // Value
+    U32Marker,
 >;
 
 pub type U64Tree = Tree<

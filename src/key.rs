@@ -4,7 +4,7 @@ use core::{
     ops::{BitOr, Shl, Shr},
 };
 
-use typenum::{Unsigned, op, U1, U128, U64, U32, U16, U8};
+use typenum::{op, Unsigned, U1, U128, U16, U32, U64, U8};
 
 #[derive(Clone, Copy, Debug, Eq)]
 pub enum MaybeBorrowed<'a, B> {

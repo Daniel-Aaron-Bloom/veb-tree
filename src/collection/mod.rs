@@ -1,15 +1,12 @@
-use core::{borrow::Borrow};
+use core::borrow::Borrow;
 
-use alloc::{boxed::Box};
+use alloc::boxed::Box;
 
+use crate::{key::MaybeBorrowed, RemoveResult, TreeKV, VebTree};
 use crate::{key::VebKey, MaybeRemoveResult};
-use crate::{
-    key::{MaybeBorrowed},
-    RemoveResult, TreeKV, VebTree,
-};
 
-pub mod hash;
 pub mod array;
+pub mod hash;
 
 /// A marker trait to help with associated type bounds
 pub trait SuperTreeCollection<K: VebKey, V> {

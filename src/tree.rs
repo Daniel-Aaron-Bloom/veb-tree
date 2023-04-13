@@ -47,27 +47,34 @@ where
 
 impl<Summary, Children, K, V> Clone for TreeData<Summary, Children, K, V>
 where
-    K: VebKey+Clone,
+    K: VebKey + Clone,
     V: Clone,
     Summary: VebTreeMarker<K::Hi, ()>,
     Children: VebTreeCollectionMarker<K, V>,
-    Option<(Summary::Tree, TC<Children, K, V>)>: Clone {
+    Option<(Summary::Tree, TC<Children, K, V>)>: Clone,
+{
     fn clone(&self) -> Self {
-        Self { max: self.max.clone(), children: self.children.clone() }
+        Self {
+            max: self.max.clone(),
+            children: self.children.clone(),
+        }
     }
 }
 impl<K, V, Summary, Children> Clone for Tree<K, V, Summary, Children>
 where
-    K: VebKey+Clone,
+    K: VebKey + Clone,
     V: Clone,
     Summary: VebTreeMarker<K::Hi, ()>,
     Children: VebTreeCollectionMarker<K, V>,
-    Option<TreeData<Summary, Children, K, V>>: Clone
-    {
-        fn clone(&self) -> Self {
-            Self { min: self.min.clone(), data: self.data.clone() }
+    Option<TreeData<Summary, Children, K, V>>: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            min: self.min.clone(),
+            data: self.data.clone(),
         }
     }
+}
 
 impl<Summary, Children, K, V> VebTree for Tree<K, V, Summary, Children>
 where
