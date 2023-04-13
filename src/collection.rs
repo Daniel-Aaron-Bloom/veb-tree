@@ -5,11 +5,8 @@ use core::{
 
 use hashbrown::HashMap;
 
+use crate::{key::MaybeBorrowed, RemoveResult, TreeKV, VebTree};
 use crate::{key::VebKey, MaybeRemoveResult};
-use crate::{
-    key::{MaybeBorrowed},
-    RemoveResult, TreeKV, VebTree,
-};
 
 /// A marker trait to help with associated type bounds
 pub trait SuperTreeCollection<K: VebKey, V> {
