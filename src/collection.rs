@@ -188,7 +188,7 @@ where
     }
 }
 
-impl<T: TreeCollection> TreeCollection for Box<T> {
+impl<T: ?Sized+TreeCollection> TreeCollection for Box<T> {
     type High = T::High;
     type Tree = T::Tree;
 
