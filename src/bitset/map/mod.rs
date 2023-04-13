@@ -34,7 +34,7 @@ pub struct ByteMap<L> {
 
 /// All operations are assumed to be `O(1)` complexity
 impl<L: list::TreeList> TreeCollection for ByteMap<L> {
-    type High = u8;
+    type Hi = u8;
     type Tree = L::Tree;
 
     fn create(h: &u8, tree: Self::Tree) -> Self {
@@ -59,8 +59,8 @@ impl<L: list::TreeList> TreeCollection for ByteMap<L> {
 
     fn insert_key<'a, Q>(&mut self, h: Q, (l, v): CollectionKV<Self>) -> TreeInsertResult<'a, Self>
     where
-        Q: Into<MaybeBorrowed<'a, Self::High>>,
-        Self::High: 'a,
+        Q: Into<MaybeBorrowed<'a, Self::Hi>>,
+        Self::Hi: 'a,
     {
         let h = h.into();
         let k = *h;
@@ -75,7 +75,7 @@ impl<L: list::TreeList> TreeCollection for ByteMap<L> {
     }
     fn remove_key<'a, Q, R>(mut self, h: Q, r: R) -> TreeRemoveResult<Self>
     where
-        Q: Borrow<Self::High>,
+        Q: Borrow<Self::Hi>,
         R: FnOnce(Self::Tree) -> RemoveResult<Self::Tree>,
     {
         let k = *h.borrow();
@@ -97,7 +97,7 @@ impl<L: list::TreeList> TreeCollection for ByteMap<L> {
 
     fn maybe_remove_key<'a, Q, R>(mut self, h: Q, r: R) -> TreeMaybeRemoveResult<Self>
     where
-        Q: Borrow<Self::High>,
+        Q: Borrow<Self::Hi>,
         R: FnOnce(Self::Tree) -> MaybeRemoveResult<Self::Tree>,
     {
         let k = *h.borrow();

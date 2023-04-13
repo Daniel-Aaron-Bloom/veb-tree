@@ -11,12 +11,12 @@ pub mod hash;
 /// A marker trait to help with associated type bounds
 pub trait SuperTreeCollection<K: VebKey, V> {
     type Tree: VebTree<Key = K::Lo, Value = V>;
-    type TC: TreeCollection<High = K::Hi, Tree = Self::Tree>;
+    type TC: TreeCollection<Hi = K::Hi, Tree = Self::Tree>;
 }
 
 impl<K: VebKey, V, T> SuperTreeCollection<K, V> for T
 where
-    T: TreeCollection<High = K::Hi>,
+    T: TreeCollection<Hi = K::Hi>,
     T::Tree: VebTree<Key = K::Lo, Value = V>,
 {
     type TC = T;
@@ -30,9 +30,9 @@ pub trait VebTreeCollectionMarker<K: VebKey, V> {
 pub type CollectionKV<TC> = TreeKV<<TC as TreeCollection>::Tree>;
 
 pub type TreeInsertResult<'a, TC> = Result<
-    MaybeBorrowed<'a, <TC as TreeCollection>::High>,
+    MaybeBorrowed<'a, <TC as TreeCollection>::Hi>,
     (
-        MaybeBorrowed<'a, <TC as TreeCollection>::High>,
+        MaybeBorrowed<'a, <TC as TreeCollection>::Hi>,
         Option<CollectionKV<TC>>,
     ),
 >;
@@ -42,18 +42,18 @@ pub type TreeMaybeRemoveResult<TC> = Result<TreeRemoveResult<TC>, TC>;
 /// All operations are assumed to be `O(1)` complexity
 pub trait TreeCollection: Sized {
     /// The key used to index this collection
-    type High;
+    type Hi;
     /// The type of the trees stored in this collection
     type Tree: VebTree;
 
     /// Construct a collection from a single entry
-    fn create(h: &Self::High, tree: Self::Tree) -> Self;
+    fn create(h: &Self::Hi, tree: Self::Tree) -> Self;
 
     /// Get a reference to the tree corresponding to the key `h`
-    fn get(&self, h: &Self::High) -> Option<&Self::Tree>;
+    fn get(&self, h: &Self::Hi) -> Option<&Self::Tree>;
 
     /// Get a mutable reference to the tree corresponding to the key `h`
-    fn get_mut(&mut self, h: &Self::High) -> Option<&mut Self::Tree>;
+    fn get_mut(&mut self, h: &Self::Hi) -> Option<&mut Self::Tree>;
 
     /// Insert an value into a tree contained within
     ///
@@ -64,8 +64,8 @@ pub trait TreeCollection: Sized {
     /// are returned
     fn insert_key<'a, Q>(&'a mut self, h: Q, lv: CollectionKV<Self>) -> TreeInsertResult<'a, Self>
     where
-        Q: Into<MaybeBorrowed<'a, Self::High>>,
-        Self::High: 'a;
+        Q: Into<MaybeBorrowed<'a, Self::Hi>>,
+        Self::Hi: 'a;
 
     /// Remove a value from a tree contained within.
     ///
@@ -74,7 +74,7 @@ pub trait TreeCollection: Sized {
     /// is erased.
     fn remove_key<'a, Q, R>(self, h: Q, r: R) -> TreeRemoveResult<Self>
     where
-        Q: Borrow<Self::High>,
+        Q: Borrow<Self::Hi>,
         R: FnOnce(Self::Tree) -> RemoveResult<Self::Tree>;
 
     /// Remove a value from a tree contained within.
@@ -84,30 +84,30 @@ pub trait TreeCollection: Sized {
     /// is erased.
     fn maybe_remove_key<'a, Q, R>(self, h: Q, r: R) -> TreeMaybeRemoveResult<Self>
     where
-        Q: Borrow<Self::High>,
+        Q: Borrow<Self::Hi>,
         R: FnOnce(Self::Tree) -> MaybeRemoveResult<Self::Tree>;
 }
 
 impl<T: ?Sized + TreeCollection> TreeCollection for Box<T> {
-    type High = T::High;
+    type Hi = T::Hi;
     type Tree = T::Tree;
 
-    fn create(h: &Self::High, tree: Self::Tree) -> Self {
+    fn create(h: &Self::Hi, tree: Self::Tree) -> Self {
         Box::new(T::create(h, tree))
     }
 
-    fn get(&self, h: &Self::High) -> Option<&Self::Tree> {
+    fn get(&self, h: &Self::Hi) -> Option<&Self::Tree> {
         (**self).get(h)
     }
 
-    fn get_mut(&mut self, h: &Self::High) -> Option<&mut Self::Tree> {
+    fn get_mut(&mut self, h: &Self::Hi) -> Option<&mut Self::Tree> {
         (**self).get_mut(h)
     }
 
     fn insert_key<'a, Q>(&'a mut self, h: Q, lv: CollectionKV<Self>) -> TreeInsertResult<'a, Self>
     where
-        Q: Into<MaybeBorrowed<'a, Self::High>>,
-        Self::High: 'a,
+        Q: Into<MaybeBorrowed<'a, Self::Hi>>,
+        Self::Hi: 'a,
     {
         (**self).insert_key(h, lv)
     }
@@ -119,7 +119,7 @@ impl<T: ?Sized + TreeCollection> TreeCollection for Box<T> {
     /// is erased.
     fn remove_key<'a, Q, R>(self, h: Q, r: R) -> TreeRemoveResult<Self>
     where
-        Q: Borrow<Self::High>,
+        Q: Borrow<Self::Hi>,
         R: FnOnce(Self::Tree) -> RemoveResult<Self::Tree>,
     {
         let (t, v) = (*self).remove_key(h, r);
@@ -133,7 +133,7 @@ impl<T: ?Sized + TreeCollection> TreeCollection for Box<T> {
     /// is erased.
     fn maybe_remove_key<'a, Q, R>(self, h: Q, r: R) -> TreeMaybeRemoveResult<Self>
     where
-        Q: Borrow<Self::High>,
+        Q: Borrow<Self::Hi>,
         R: FnOnce(Self::Tree) -> MaybeRemoveResult<Self::Tree>,
     {
         let (t, v) = (*self).maybe_remove_key(h, r).map_err(Box::new)?;

@@ -30,16 +30,16 @@ where
     type TreeCollection = HashMap<K::Hi, Tree::Tree, S>;
 }
 
-impl<High, V, S> TreeCollection for HashMap<High, V, S>
+impl<Hi, V, S> TreeCollection for HashMap<Hi, V, S>
 where
-    High: Clone + Eq + Hash,
+    Hi: Clone + Eq + Hash,
     V: VebTree,
     S: BuildHasher + Default,
 {
-    type High = High;
+    type Hi = Hi;
     type Tree = V;
 
-    fn create(h: &Self::High, tree: Self::Tree) -> Self {
+    fn create(h: &Self::Hi, tree: Self::Tree) -> Self {
         let v = HashMap::from_iter([(h.clone(), tree)]);
         debug_assert_eq!(v.len(), 1);
         debug_assert!(v.contains_key(h));
@@ -47,10 +47,10 @@ where
         v
     }
 
-    fn get(&self, h: &Self::High) -> Option<&Self::Tree> {
+    fn get(&self, h: &Self::Hi) -> Option<&Self::Tree> {
         self.get(h)
     }
-    fn get_mut(&mut self, h: &Self::High) -> Option<&mut Self::Tree> {
+    fn get_mut(&mut self, h: &Self::Hi) -> Option<&mut Self::Tree> {
         self.get_mut(h)
     }
 
@@ -60,8 +60,8 @@ where
         (l, v): CollectionKV<Self>,
     ) -> TreeInsertResult<'a, Self>
     where
-        Q: Into<MaybeBorrowed<'a, Self::High>>,
-        Self::High: 'a,
+        Q: Into<MaybeBorrowed<'a, Self::Hi>>,
+        Self::Hi: 'a,
     {
         let h = h.into();
         use hashbrown::hash_map::RawEntryMut;
@@ -79,7 +79,7 @@ where
 
     fn remove_key<'a, Q, R>(mut self, h: Q, r: R) -> TreeRemoveResult<Self>
     where
-        Q: Borrow<Self::High>,
+        Q: Borrow<Self::Hi>,
         R: FnOnce(Self::Tree) -> RemoveResult<Self::Tree>,
     {
         use hashbrown::hash_map::RawEntryMut;
@@ -105,7 +105,7 @@ where
 
     fn maybe_remove_key<'a, Q, R>(mut self, h: Q, r: R) -> TreeMaybeRemoveResult<Self>
     where
-        Q: Borrow<Self::High>,
+        Q: Borrow<Self::Hi>,
         R: FnOnce(Self::Tree) -> MaybeRemoveResult<Self::Tree>,
     {
         use hashbrown::hash_map::RawEntryMut;

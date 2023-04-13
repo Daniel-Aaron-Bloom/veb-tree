@@ -94,16 +94,16 @@ pub struct ArrayTreeCollection<H, A> {
     _marker: PhantomData<H>,
 }
 
-impl<High, A> TreeCollection for ArrayTreeCollection<High, A>
+impl<Hi, A> TreeCollection for ArrayTreeCollection<Hi, A>
 where
-    High: SizedVebKey,
-    A: OptionArray<High::Cardinality>,
+    Hi: SizedVebKey,
+    A: OptionArray<Hi::Cardinality>,
 {
-    type High = High;
+    type Hi = Hi;
     type Tree = A::V;
 
     #[inline(never)]
-    fn create(h: &Self::High, tree: Self::Tree) -> Self {
+    fn create(h: &Self::Hi, tree: Self::Tree) -> Self {
         let mut array = A::create();
         *array.get_mut(h.index()) = Some(tree);
         Self {
@@ -113,18 +113,18 @@ where
         }
     }
 
-    fn get(&self, h: &Self::High) -> Option<&Self::Tree> {
+    fn get(&self, h: &Self::Hi) -> Option<&Self::Tree> {
         self.array.get(h.index()).as_ref()
     }
 
-    fn get_mut(&mut self, h: &Self::High) -> Option<&mut Self::Tree> {
+    fn get_mut(&mut self, h: &Self::Hi) -> Option<&mut Self::Tree> {
         self.array.get_mut(h.index()).as_mut()
     }
 
     fn insert_key<'a, Q>(&mut self, h: Q, (l, v): CollectionKV<Self>) -> TreeInsertResult<'a, Self>
     where
-        Q: Into<MaybeBorrowed<'a, Self::High>>,
-        Self::High: 'a,
+        Q: Into<MaybeBorrowed<'a, Self::Hi>>,
+        Self::Hi: 'a,
     {
         let h = h.into();
         match self.array.get_mut(h.index()) {
@@ -147,7 +147,7 @@ where
     /// is erased.
     fn remove_key<'a, Q, R>(mut self, h: Q, r: R) -> TreeRemoveResult<Self>
     where
-        Q: Borrow<Self::High>,
+        Q: Borrow<Self::Hi>,
         R: FnOnce(Self::Tree) -> RemoveResult<Self::Tree>,
     {
         let h = h.borrow();
@@ -172,7 +172,7 @@ where
     /// is erased.
     fn maybe_remove_key<'a, Q, R>(mut self, h: Q, r: R) -> TreeMaybeRemoveResult<Self>
     where
-        Q: Borrow<Self::High>,
+        Q: Borrow<Self::Hi>,
         R: FnOnce(Self::Tree) -> MaybeRemoveResult<Self::Tree>,
     {
         let h = h.borrow();
