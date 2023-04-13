@@ -11,18 +11,28 @@ use std::{collections::BTreeSet, time::Duration};
 
 use veb_tree::{
     bitset::{ByteCollectionMarker, ByteSetMarker, VecDequeMarker},
+    collection::ArrayTreeCollectionMarker,
     hash::HashMapMarker,
     tree::{Tree, TreeMarker},
     VebTree,
 };
-//VebTree
+// //VebTree
+// type U32Tree = Tree<
+//     u32,                                                                            // Key
+//     (),                                                                             // Value
+//     TreeMarker<ByteSetMarker, ByteCollectionMarker<VecDequeMarker, ByteSetMarker>>, // Summary
+//     // Children
+//     ArrayTreeCollectionMarker<
+//         TreeMarker<ByteSetMarker, ByteCollectionMarker<VecDequeMarker, ByteSetMarker>>, // Child "tree"
+//     >,
+// >;
 type U32Tree = Tree<
     u32,                                                                            // Key
     (),                                                                             // Value
-    TreeMarker<ByteSetMarker, ByteCollectionMarker<VecDequeMarker, ByteSetMarker>>, // Summary
+    TreeMarker<ByteSetMarker, ArrayTreeCollectionMarker<ByteSetMarker>>, // Summary
     // Children
-    HashMapMarker<
-        TreeMarker<ByteSetMarker, ByteCollectionMarker<VecDequeMarker, ByteSetMarker>>, // Child "tree"
+    ArrayTreeCollectionMarker<
+        TreeMarker<ByteSetMarker, ArrayTreeCollectionMarker<ByteSetMarker>>, // Child "tree"
     >,
 >;
 
@@ -137,7 +147,7 @@ fn for_all_widths<'a, M: Measurement, Tree, Ret>(
     group.warm_up_time(Duration::from_millis(1000));
     group.measurement_time(Duration::from_millis(2000));
 
-    for bits in 4..=30 {
+    for bits in 27..=30 {
         let capacity = 1 << bits;
         let distr = Uniform::from(0..capacity);
 

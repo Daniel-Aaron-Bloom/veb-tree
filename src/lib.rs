@@ -511,7 +511,7 @@ impl<V: VebTree> VebTree for SizedVebTree<V> {
     }
 }
 
-impl<V: ?Sized+VebTree> VebTree for Box<V> {
+impl<V: ?Sized + VebTree> VebTree for Box<V> {
     type Key = V::Key;
     type Value = V::Value;
 

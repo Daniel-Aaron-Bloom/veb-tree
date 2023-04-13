@@ -20,8 +20,8 @@ pub struct ByteCollectionMarker<#[invariant] ListMarker, #[invariant] Val>;
 
 impl<K, V, List, Tree> VebTreeCollectionMarker<K, V> for ByteCollectionMarker<List, Tree>
 where
-    K: VebKey<High = u8>,
-    Tree: VebTreeMarker<K::Low, V>,
+    K: VebKey<Hi = u8>,
+    Tree: VebTreeMarker<K::Lo, V>,
     List: list::TreeListMarker<Tree::Tree>,
 {
     type TreeCollection = ByteMap<List::List>;
@@ -69,7 +69,7 @@ impl<L: list::TreeList> TreeCollection for ByteMap<L> {
             Err((h, self.list.get_mut(i).insert(l, v)))
         } else {
             self.list.insert_tree(i, VebTree::from_monad(l, v));
-            Ok(k)
+            Ok(h)
         };
         v
     }

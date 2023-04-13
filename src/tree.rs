@@ -16,7 +16,7 @@ pub struct TreeMarker<#[invariant] Summary, #[invariant] Children>;
 impl<K, V, Summary, Children> VebTreeMarker<K, V> for TreeMarker<Summary, Children>
 where
     K: VebKey,
-    Summary: VebTreeMarker<K::High, ()>,
+    Summary: VebTreeMarker<K::Hi, ()>,
     Children: VebTreeCollectionMarker<K, V>,
 {
     type Tree = Tree<K, V, Summary, Children>;
@@ -28,7 +28,7 @@ type TC<Children, K, V> =
 pub struct Tree<K, V, Summary, Children>
 where
     K: VebKey,
-    Summary: VebTreeMarker<K::High, ()>,
+    Summary: VebTreeMarker<K::Hi, ()>,
     Children: VebTreeCollectionMarker<K, V>,
 {
     min: (K, V),
@@ -38,7 +38,7 @@ where
 struct TreeData<Summary, Children, K, V>
 where
     K: VebKey,
-    Summary: VebTreeMarker<K::High, ()>,
+    Summary: VebTreeMarker<K::Hi, ()>,
     Children: VebTreeCollectionMarker<K, V>,
 {
     max: (K, V),
@@ -48,7 +48,7 @@ where
 impl<Summary, Children, K, V> VebTree for Tree<K, V, Summary, Children>
 where
     K: VebKey,
-    Summary: VebTreeMarker<K::High, ()>,
+    Summary: VebTreeMarker<K::Hi, ()>,
     Children: VebTreeCollectionMarker<K, V>,
 {
     type Key = K;
@@ -132,7 +132,7 @@ where
         };
 
         K::split(k, |hi, lo| {
-            // Try to find the child where `k` is expected to live (identified by `high`)
+            // Try to find the child where `k` is expected to live (identified by `hi`)
             // Then ask that node for the successor to `low`. This is expected to short circuit if `low` is outside the range of `child`
             let (lo, val) = children.get(&*hi)?.find(lo)?;
 
@@ -166,7 +166,7 @@ where
         };
 
         K::split(k, |hi, lo| {
-            // Try to find the child where `k` is expected to live (identified by `high`)
+            // Try to find the child where `k` is expected to live (identified by `hi`)
             // Then ask that node for the successor to `low`. This is expected to short circuit if `low` is outside the range of `child`
             let (lo, val) = children.get_mut(&*hi)?.find_mut(lo)?;
 
@@ -206,22 +206,22 @@ where
         };
 
         K::split(k, |hi, lo| {
-            // Try to find the child where `k` is expected to live (identified by `high`)
+            // Try to find the child where `k` is expected to live (identified by `hi`)
             // Then ask that node for the predecessor to `low`. This is expected to short circuit if `low` is outside the range of `child`
             let lo = children.get(&*hi).and_then(|child| child.predecessor(lo));
             if let Some((lo, val)) = lo {
                 return Some((MaybeBorrowed::Owned(K::join(hi, lo.into())), val));
             }
 
-            // If we didn't find it, find the predecessor to `high` in the summary and use the `min` of that node
+            // If we didn't find it, find the predecessor to `hi` in the summary and use the `min` of that node
             if let Some((hi, ())) = summary.predecessor(&*hi) {
-                let hi: MaybeBorrowed<K::High> = hi.into();
+                let hi: MaybeBorrowed<K::Hi> = hi.into();
                 let child = children.get(&hi).unwrap();
                 let (lo, val) = child.max_val();
                 return Some((MaybeBorrowed::Owned(K::join(hi, lo.into())), val));
             }
 
-            // If there are no predecessor to `high`, then use the max value for this node
+            // If there are no predecessor to `hi`, then use the max value for this node
             Some((MaybeBorrowed::Borrowed(&self.min.0), &self.min.1))
         })
     }
@@ -261,7 +261,7 @@ where
         };
 
         K::split(k, |hi, lo| {
-            // Try to find the child where `k` is expected to live (identified by `high`)
+            // Try to find the child where `k` is expected to live (identified by `hi`)
             // Then ask that node for the predecessor to `low`. This is expected to short circuit if `low` is outside the range of `child`
             {
                 // FIXME: rust-lang/rust#106116
@@ -281,15 +281,15 @@ where
                 }
             };
 
-            // If we didn't find it, find the predecessor to `high` in the summary and use the `min` of that node
+            // If we didn't find it, find the predecessor to `hi` in the summary and use the `min` of that node
             if let Some((hi, ())) = summary.predecessor(hi) {
-                let hi: MaybeBorrowed<K::High> = hi.into();
+                let hi: MaybeBorrowed<K::Hi> = hi.into();
                 let child = children.get_mut(&hi).unwrap();
                 let (lo, val) = child.max_val_mut();
                 return Some((MaybeBorrowed::Owned(K::join(hi, lo.into())), val));
             }
 
-            // If there are no predecessor to `high`, then use the max value for this node
+            // If there are no predecessor to `hi`, then use the max value for this node
             Some((MaybeBorrowed::Borrowed(&self.min.0), &mut self.min.1))
         })
     }
@@ -324,21 +324,21 @@ where
         }
 
         K::split(k, |hi, lo| {
-            // Try to find the child where `k` is expected to live (identified by `high`)
+            // Try to find the child where `k` is expected to live (identified by `hi`)
             // Then ask that node for the successor to `low`. This is expected to short circuit if `low` is outside the range of `child`
             let lo = children.get(&*hi).and_then(|child| child.successor(lo));
             if let Some((lo, val)) = lo {
                 return Some((MaybeBorrowed::Owned(K::join(hi, lo.into())), val));
             }
 
-            // If we didn't find it, find the successor to `high` in the summary and use the `min` of that node
+            // If we didn't find it, find the successor to `hi` in the summary and use the `min` of that node
             if let Some((hi, ())) = summary.successor(&*hi) {
                 let child = children.get(&hi).unwrap();
                 let (lo, val) = child.min_val();
                 return Some((MaybeBorrowed::Owned(K::join(hi.into(), lo.into())), val));
             }
 
-            // If there are no successors to `high`, then use the max value for this node
+            // If there are no successors to `hi`, then use the max value for this node
             Some((MaybeBorrowed::Borrowed(&data.max.0), &data.max.1))
         })
     }
@@ -373,7 +373,7 @@ where
         }
 
         K::split(k, |hi, lo| {
-            // Try to find the child where `k` is expected to live (identified by `high`)
+            // Try to find the child where `k` is expected to live (identified by `hi`)
             // Then ask that node for the successor to `low`. This is expected to short circuit if `low` is outside the range of `child`
             {
                 // FIXME: rust-lang/rust#106116
@@ -393,14 +393,14 @@ where
                 }
             }
 
-            // If we didn't find it, find the successor to `high` in the summary and use the `min` of that node
+            // If we didn't find it, find the successor to `hi` in the summary and use the `min` of that node
             if let Some((hi, ())) = summary.successor(hi) {
                 let child = children.get_mut(&hi).unwrap();
                 let (lo, val) = child.min_val_mut();
                 return Some((MaybeBorrowed::Owned(K::join(hi.into(), lo.into())), val));
             }
 
-            // If there are no successors to `high`, then use the max value for this node
+            // If there are no successors to `hi`, then use the max value for this node
             Some((MaybeBorrowed::Borrowed(&data.max.0), &mut data.max.1))
         })
     }
@@ -451,8 +451,8 @@ where
         K::split(k, |hi, lo| {
             if let Some((mut summary, mut children)) = data.children.take() {
                 let r = match children.insert_key(hi, (lo.into_or_clone(), v)) {
-                    Ok(high) => {
-                        summary.insert(high, ());
+                    Ok(hi) => {
+                        summary.insert(hi.into_or_clone(), ());
                         None
                     }
                     Err((_, None)) => None,
