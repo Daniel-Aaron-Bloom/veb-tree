@@ -1,5 +1,3 @@
-use core::mem::forget;
-
 use alloc::collections::VecDeque;
 
 use crate::{MaybeRemoveResult, RemoveResult, TreeKV, VebTree};
@@ -56,69 +54,56 @@ impl<V: VebTree> TreeList for VecDeque<V> {
     where
         F: FnOnce(Self::Tree) -> RemoveResult<Self::Tree>,
     {
-        struct PanicHandler<'a, V>(&'a mut VecDeque<V>, usize);
-        impl<'a, V> Drop for PanicHandler<'a, V> {
-            fn drop(&mut self) {
-                forget(self.0.remove(self.1).unwrap());
-            }
-        }
+        use vec_entry::{EntryExt, Entry};
 
-        // This is safe because we either write over it or forget it
-        let tree = unsafe { core::ptr::read(&self[i]) };
-        let handler = PanicHandler(&mut self, i);
+        let entry = match self.entry(i) {
+            Entry::Occupied(o) => o,
+            Entry::Vacant(_) => unreachable!(),
+        };
 
-        match f(tree) {
-            (None, val) => {
-                forget(handler);
-                forget(self.remove(i).unwrap());
-                if self.is_empty() {
-                    (None, val)
-                } else {
-                    (Some((self, true)), val)
-                }
-            }
-            (Some(tree), val) => {
-                forget(handler);
-                unsafe { core::ptr::write(&mut self[i], tree) };
-                (Some((self, false)), val)
-            }
+        let (_, (val, removed)) = entry.replace_entry_with(|_, tree| {
+            let (tree, val) = f(tree);
+            let removed = tree.is_none();
+            (tree, (val, removed))
+        });
+        
+        if self.is_empty() {
+            debug_assert!(removed);
+            (None, val)
+        } else {
+            (Some((self, removed)), val)
         }
     }
     fn maybe_remove_key<F>(mut self, i: usize, f: F) -> TreeListMaybeRemoveResult<Self>
     where
         F: FnOnce(Self::Tree) -> MaybeRemoveResult<Self::Tree>,
     {
-        struct PanicHandler<'a, V>(&'a mut VecDeque<V>, usize);
-        impl<'a, V> Drop for PanicHandler<'a, V> {
-            fn drop(&mut self) {
-                forget(self.0.remove(self.1).unwrap());
-            }
-        }
+        use vec_entry::{EntryExt, Entry};
 
-        // This is safe because we either write over it or forget it
-        let tree = unsafe { core::ptr::read(&self[i]) };
-        let handler = PanicHandler(&mut self, i);
+        let entry = match self.entry(i) {
+            Entry::Occupied(o) => o,
+            Entry::Vacant(_) => unreachable!(),
+        };
 
-        match f(tree) {
-            Err(tree) => {
-                forget(handler);
-                unsafe { core::ptr::write(&mut self[i], tree) };
-                Err(self)
-            }
-            Ok((None, val)) => {
-                forget(handler);
-                forget(self.remove(i).unwrap());
-                if self.is_empty() {
-                    Ok((None, val))
-                } else {
-                    Ok((Some((self, true)), val))
+        let (_, removed) = entry.replace_entry_with(|_, tree| {
+            match f(tree) {
+                Err(tree) => (Some(tree), None),
+                Ok((tree, val)) => {
+                    let removed = tree.is_none();
+                    (tree, Some((val, removed)))
                 }
             }
-            Ok((Some(tree), val)) => {
-                forget(handler);
-                unsafe { core::ptr::write(&mut self[i], tree) };
-                Ok((Some((self, false)), val))
-            }
+        });
+
+        match removed {
+            Some((val, removed)) if self.is_empty() => {
+                debug_assert!(removed);
+                Ok((None, val))
+            },
+            Some((val, removed)) => {
+                Ok((Some((self, removed)), val))
+            },
+            None => Err(self)
         }
     }
 }

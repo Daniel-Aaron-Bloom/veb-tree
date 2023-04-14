@@ -10,41 +10,36 @@ use rand::{
 use std::{collections::BTreeMap, time::Duration};
 
 use veb_tree::{
-    bitset::ByteSetMarker,
+    bitset::{ByteSetMarker, ByteCollectionMarker, VecDequeMarker},
     collection::{array::ArrayTreeCollectionMarker, hash::HashMapMarker},
     markers::{BoxMarker, VebTreeType},
     tree::{Tree, TreeMarker},
     SizedVebTree, VebTree,
 };
 // //VebTree
-// type U32Tree = Tree<
-//     u32,                                                                            // Key
-//     (),                                                                             // Value
-//     TreeMarker<ByteSetMarker, ByteCollectionMarker<VecDequeMarker, ByteSetMarker>>, // Summary
-//     // Children
-//     ArrayTreeCollectionMarker<
-//         TreeMarker<ByteSetMarker, ByteCollectionMarker<VecDequeMarker, ByteSetMarker>>, // Child "tree"
-//     >,
-// >;
-// type U32Tree = Tree<
-//     u32,                                                                            // Key
-//     (),                                                                             // Value
+type U32Marker = TreeMarker<
+    TreeMarker<ByteSetMarker, ByteCollectionMarker<VecDequeMarker, ByteSetMarker>>, // Summary
+    // Children
+    ArrayTreeCollectionMarker<BoxMarker<
+        TreeMarker<ByteSetMarker, ByteCollectionMarker<VecDequeMarker, ByteSetMarker>>, // Child "tree"
+    >>,
+>;
+// type U32Marker = TreeMarker<
 //     TreeMarker<ByteSetMarker, ArrayTreeCollectionMarker<BoxMarker<ByteSetMarker>>>, // Summary
 //     // Children
 //     ArrayTreeCollectionMarker<BoxMarker<
 //         TreeMarker<ByteSetMarker, ArrayTreeCollectionMarker<BoxMarker<ByteSetMarker>>>, // Child "tree"
 //     >>,
 // >;
-
-type U32Marker = TreeMarker<
-    TreeMarker<ByteSetMarker, ArrayTreeCollectionMarker<BoxMarker<ByteSetMarker>>>, // Summary
-    // Children
-    ArrayTreeCollectionMarker<
-        BoxMarker<
-            TreeMarker<ByteSetMarker, ArrayTreeCollectionMarker<BoxMarker<ByteSetMarker>>>, // Child "tree"
-        >,
-    >,
->;
+// type U32Marker = TreeMarker<
+//     TreeMarker<ByteSetMarker, ArrayTreeCollectionMarker<BoxMarker<ByteSetMarker>>>, // Summary
+//     // Children
+//     ArrayTreeCollectionMarker<
+//         BoxMarker<
+//             TreeMarker<ByteSetMarker, ArrayTreeCollectionMarker<BoxMarker<ByteSetMarker>>>, // Child "tree"
+//         >,
+//     >,
+// >;
 type U32Tree = SizedVebTree<VebTreeType<u32, (), U32Marker>>;
 
 pub type U64Tree = Tree<
