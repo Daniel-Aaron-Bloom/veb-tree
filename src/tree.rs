@@ -164,7 +164,7 @@ where
 
         K::split(k, |hi, lo| {
             // Try to find the child where `k` is expected to live (identified by `hi`)
-            // Then ask that node for the successor to `low`. This is expected to short circuit if `low` is outside the range of `child`
+            // Then ask that node for the successor to `lo`. This is expected to short circuit if `lo` is outside the range of `child`
             let (lo, val) = children.get(&*hi)?.find(lo)?;
 
             Some((MaybeBorrowed::Owned(K::join(hi, lo.into())), val))
@@ -198,7 +198,7 @@ where
 
         K::split(k, |hi, lo| {
             // Try to find the child where `k` is expected to live (identified by `hi`)
-            // Then ask that node for the successor to `low`. This is expected to short circuit if `low` is outside the range of `child`
+            // Then ask that node for the successor to `lo`. This is expected to short circuit if `lo` is outside the range of `child`
             let (lo, val) = children.get_mut(&*hi)?.find_mut(lo)?;
 
             Some((MaybeBorrowed::Owned(K::join(hi, lo.into())), val))
@@ -238,7 +238,7 @@ where
 
         K::split(k, |hi, lo| {
             // Try to find the child where `k` is expected to live (identified by `hi`)
-            // Then ask that node for the predecessor to `low`. This is expected to short circuit if `low` is outside the range of `child`
+            // Then ask that node for the predecessor to `lo`. This is expected to short circuit if `lo` is outside the range of `child`
             let lo = children.get(&*hi).and_then(|child| child.predecessor(lo));
             if let Some((lo, val)) = lo {
                 return Some((MaybeBorrowed::Owned(K::join(hi, lo.into())), val));
@@ -292,24 +292,52 @@ where
         };
 
         K::split(k, |hi, lo| {
-            // Try to find the child where `k` is expected to live (identified by `hi`)
-            // Then ask that node for the predecessor to `low`. This is expected to short circuit if `low` is outside the range of `child`
-            {
-                // FIXME: rust-lang/rust#106116
-                // Remove this when core::ptr::from_mut is stabilized
-                pub fn from_mut<T: ?Sized>(r: &mut T) -> *mut T {
-                    r
-                }
-                // FIXME: rust-lang/rust#43234
-                // Remove this unsafe hack when NLL works
-                let children = unsafe { &mut *from_mut(children) };
+            // FIXME: rust-lang/rust#43234
+            // Remove this polonius hack when NLL works
+            use polonius_the_crab::{polonius, WithLifetime};
+            type RetRef<K, V> = dyn for<'lt> WithLifetime<
+                'lt,
+                T = (MaybeBorrowed<'lt, <K as VebKey>::Lo>, &'lt mut V),
+            >;
 
-                let lo = children
-                    .get_mut(&*hi)
-                    .and_then(|child| child.predecessor_mut(lo));
-                if let Some((lo, val)) = lo {
-                    return Some((MaybeBorrowed::Owned(K::join(hi, lo.into())), val));
+            trait PoloniusExt {
+                type Hi;
+                type Lo;
+                type V;
+                /// Try to find the child where `k` is expected to live (identified by `hi`)
+                /// Then ask that node for the predecessor to `lo`. This is expected to short circuit if `lo` is outside the range of `child`
+                fn get_mut_predecessor_mut<'lt>(
+                    &'lt mut self,
+                    hi: &Self::Hi,
+                    lo: MaybeBorrowed<Self::Lo>,
+                ) -> Option<(MaybeBorrowed<'lt, Self::Lo>, &'lt mut Self::V)>;
+            }
+            impl<T: TreeCollection> PoloniusExt for T {
+                type Hi = T::Hi;
+                type Lo = <T::Tree as VebTree>::Key;
+                type V = <T::Tree as VebTree>::Value;
+                fn get_mut_predecessor_mut<'lt>(
+                    &'lt mut self,
+                    hi: &Self::Hi,
+                    lo: MaybeBorrowed<Self::Lo>,
+                ) -> Option<(MaybeBorrowed<'lt, Self::Lo>, &'lt mut Self::V)> {
+                    self.get_mut(hi).and_then(|child| child.predecessor_mut(lo))
                 }
+            }
+
+            let polonius = {
+                let hi = &*hi;
+                polonius::<RetRef<K, V>, _, _, _>(children, move |children| {
+                    // Polonius hates doing this in the lambda
+                    // children.get_mut(hi).and_then(|child| child.successor_mut(lo)).ok_or(())
+                    // but is perfectly fine with calling it blindly through a trait extension
+                    children.get_mut_predecessor_mut(hi, lo).ok_or(())
+                })
+            };
+
+            let children = match polonius {
+                Ok((lo, val)) => return Some((MaybeBorrowed::Owned(K::join(hi, lo.into())), val)),
+                Err((children, ())) => children,
             };
 
             // If we didn't find it, find the predecessor to `hi` in the summary and use the `min` of that node
@@ -356,7 +384,7 @@ where
 
         K::split(k, |hi, lo| {
             // Try to find the child where `k` is expected to live (identified by `hi`)
-            // Then ask that node for the successor to `low`. This is expected to short circuit if `low` is outside the range of `child`
+            // Then ask that node for the successor to `lo`. This is expected to short circuit if `lo` is outside the range of `child`
             let lo = children.get(&*hi).and_then(|child| child.successor(lo));
             if let Some((lo, val)) = lo {
                 return Some((MaybeBorrowed::Owned(K::join(hi, lo.into())), val));
@@ -375,7 +403,7 @@ where
     }
 
     /// O(lg lg K)
-    fn successor_mut<'a, Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<K>, &mut V)>
+    fn successor_mut<'a, 'b, Q>(&'b mut self, k: Q) -> Option<(MaybeBorrowed<'b, K>, &'b mut V)>
     where
         Q: Into<MaybeBorrowed<'a, Self::Key>>,
         Self::Key: 'a,
@@ -404,25 +432,52 @@ where
         }
 
         K::split(k, |hi, lo| {
-            // Try to find the child where `k` is expected to live (identified by `hi`)
-            // Then ask that node for the successor to `low`. This is expected to short circuit if `low` is outside the range of `child`
-            {
-                // FIXME: rust-lang/rust#106116
-                // Remove this when core::ptr::from_mut is stabilized
-                pub fn from_mut<T: ?Sized>(r: &mut T) -> *mut T {
-                    r
-                }
-                // FIXME: rust-lang/rust#43234
-                // Remove this unsafe hack when NLL works
-                let children = unsafe { &mut *from_mut(children) };
+            // FIXME: rust-lang/rust#43234
+            // Remove this polonius hack when NLL works
+            use polonius_the_crab::{polonius, WithLifetime};
+            type RetRef<K, V> = dyn for<'lt> WithLifetime<
+                'lt,
+                T = (MaybeBorrowed<'lt, <K as VebKey>::Lo>, &'lt mut V),
+            >;
 
-                let lo = children
-                    .get_mut(&*hi)
-                    .and_then(|child| child.successor_mut(lo));
-                if let Some((lo, val)) = lo {
-                    return Some((MaybeBorrowed::Owned(K::join(hi, lo.into())), val));
+            trait PoloniusExt {
+                type Hi;
+                type Lo;
+                type V;
+                /// Try to find the child where `k` is expected to live (identified by `hi`)
+                /// Then ask that node for the successor to `lo`. This is expected to short circuit if `lo` is outside the range of `child`
+                fn get_mut_successor_mut<'lt>(
+                    &'lt mut self,
+                    hi: &Self::Hi,
+                    lo: MaybeBorrowed<Self::Lo>,
+                ) -> Option<(MaybeBorrowed<'lt, Self::Lo>, &'lt mut Self::V)>;
+            }
+            impl<T: TreeCollection> PoloniusExt for T {
+                type Hi = T::Hi;
+                type Lo = <T::Tree as VebTree>::Key;
+                type V = <T::Tree as VebTree>::Value;
+                fn get_mut_successor_mut<'lt>(
+                    &'lt mut self,
+                    hi: &Self::Hi,
+                    lo: MaybeBorrowed<Self::Lo>,
+                ) -> Option<(MaybeBorrowed<'lt, Self::Lo>, &'lt mut Self::V)> {
+                    self.get_mut(hi).and_then(|child| child.successor_mut(lo))
                 }
             }
+
+            let polonius = {
+                let hi = &*hi;
+                polonius::<RetRef<K, V>, _, _, _>(children, move |children| {
+                    // Polonius hates doing this in the lambda
+                    // children.get_mut(hi).and_then(|child| child.successor_mut(lo)).ok_or(())
+                    // but is perfectly fine with calling it blindly through a trait extension
+                    children.get_mut_successor_mut(hi, lo).ok_or(())
+                })
+            };
+            let children = match polonius {
+                Ok((lo, val)) => return Some((MaybeBorrowed::Owned(K::join(hi, lo.into())), val)),
+                Err((children, ())) => children,
+            };
 
             // If we didn't find it, find the successor to `hi` in the summary and use the `min` of that node
             if let Some((hi, ())) = summary.successor(hi) {
