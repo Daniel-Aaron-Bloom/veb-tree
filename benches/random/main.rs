@@ -10,46 +10,14 @@ use rand::{
 use std::{collections::BTreeMap, time::Duration};
 
 use veb_tree::{
-    bitset::{ByteSetMarker, ByteCollectionMarker, VecDequeMarker},
-    collection::{array::ArrayTreeCollectionMarker, hash::HashMapMarker},
-    markers::{BoxMarker, VebTreeType},
-    tree::{Tree, TreeMarker},
+    markers::{VebTreeType, Marker32},
     SizedVebTree, VebTree,
 };
-// //VebTree
-type U32Marker = TreeMarker<
-    TreeMarker<ByteSetMarker, ByteCollectionMarker<VecDequeMarker, ByteSetMarker>>, // Summary
-    // Children
-    ArrayTreeCollectionMarker<BoxMarker<
-        TreeMarker<ByteSetMarker, ByteCollectionMarker<VecDequeMarker, ByteSetMarker>>, // Child "tree"
-    >>,
->;
-// type U32Marker = TreeMarker<
-//     TreeMarker<ByteSetMarker, ArrayTreeCollectionMarker<BoxMarker<ByteSetMarker>>>, // Summary
-//     // Children
-//     ArrayTreeCollectionMarker<BoxMarker<
-//         TreeMarker<ByteSetMarker, ArrayTreeCollectionMarker<BoxMarker<ByteSetMarker>>>, // Child "tree"
-//     >>,
-// >;
-// type U32Marker = TreeMarker<
-//     TreeMarker<ByteSetMarker, ArrayTreeCollectionMarker<BoxMarker<ByteSetMarker>>>, // Summary
-//     // Children
-//     ArrayTreeCollectionMarker<
-//         BoxMarker<
-//             TreeMarker<ByteSetMarker, ArrayTreeCollectionMarker<BoxMarker<ByteSetMarker>>>, // Child "tree"
-//         >,
-//     >,
-// >;
-type U32Tree = SizedVebTree<VebTreeType<u32, (), U32Marker>>;
 
-pub type U64Tree = Tree<
-    u64, //64
-    &'static str,
-    U32Tree,
-    HashMapMarker<U32Tree>,
->;
+type U32Tree = SizedVebTree<VebTreeType<u32, Data, Marker32>>;
 
-type Data = ();
+type Data = f32;
+const DATA: Data = 5.4;
 
 trait VEBOperations {
     fn len(&self) -> usize;
@@ -70,10 +38,10 @@ impl VEBOperations for Option<U32Tree> {
     fn insert(&mut self, x: u32) -> Option<Data> {
         let (v, r) = match self.take() {
             Some(mut v) => {
-                let r = v.insert(x, ());
+                let r = v.insert(x, DATA);
                 (v, r)
             }
-            None => (U32Tree::from_monad(x, ()), None),
+            None => (U32Tree::from_monad(x, DATA), None),
         };
         *self = Some(v);
         r.map(|(_k, v)| v)
@@ -128,14 +96,14 @@ impl VEBOperations for Option<U32Tree> {
             .map(|(k, v)| (k.into_or_clone(), v))
     }
 }
-struct BTreeSetWrapper(BTreeMap<u32, ()>);
+struct BTreeSetWrapper(BTreeMap<u32, Data>);
 
 impl VEBOperations for BTreeSetWrapper {
     fn len(&self) -> usize {
         self.0.len()
     }
     fn insert(&mut self, x: u32) -> Option<Data> {
-        self.0.insert(x, ())
+        self.0.insert(x, DATA)
     }
 
     fn remove(&mut self, x: u32) -> Option<Data> {

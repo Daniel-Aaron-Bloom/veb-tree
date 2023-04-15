@@ -301,7 +301,7 @@ impl<L: list::List> VebTree for ByteMap<L> {
 mod test {
     use alloc::collections::VecDeque;
 
-    use crate::{collection::TreeCollection, key::MaybeBorrowed, VebTree};
+    use crate::{collection::TreeCollection, VebTree};
 
     use super::{ByteMap, ByteSet};
     #[test]

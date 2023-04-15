@@ -704,14 +704,9 @@ mod test {
     use core::fmt;
 
     use crate::{
-        bitset::{ByteCollectionMarker, ByteSetMarker, ByteTreeMarker, VecDequeMarker},
-        collection::hash::HashMapMarker,
         key::MaybeBorrowed,
-        tree::TreeMarker,
-        VebTree,
+        VebTree, markers::{VebTreeType, Marker32, Marker16},
     };
-
-    use super::Tree;
 
     fn verify<K, V, T>(
         veb: &mut T,
@@ -763,27 +758,18 @@ mod test {
 
     #[test]
     fn simple2() {
-        //VebTree
-        type U32Tree = Tree<
-            u32,                                      // Key
-            (),                                       // Value
-            TreeMarker<ByteSetMarker, ByteSetMarker>, // Summary
-            // Children
-            HashMapMarker<
-                TreeMarker<ByteSetMarker, ByteSetMarker>, // Child "tree"
-            >,
-        >;
+        type I32Tree = VebTreeType<i32, (f64, f64), Marker32>;
+        let mut v = I32Tree::from_monad(10, (2., 5.));
+        assert_eq!(v.min_val(), (MaybeBorrowed::Owned(10), &(2., 5.)));
+        assert_eq!(v.max_val(), (MaybeBorrowed::Owned(10), &(2., 5.)));
+        v.insert(15, (3., 1.));
+        assert_eq!(v.min_val(), (MaybeBorrowed::Owned(10), &(2., 5.)));
+        assert_eq!(v.max_val(), (MaybeBorrowed::Owned(15), &(3., 1.)));
     }
     #[test]
     fn simple() {
         //VebTree
-        type U16Tree = Tree<
-            u16,           // Key
-            &'static str,  // Value
-            ByteSetMarker, // Summary
-            // Children
-            ByteCollectionMarker<VecDequeMarker, ByteTreeMarker<VecDequeMarker>>,
-        >;
+        type U16Tree = VebTreeType<u16, &'static str, Marker16>;
         let mut v = U16Tree::from_monad(10, "a");
 
         assert_eq!(v.min_val(), (MaybeBorrowed::Owned(10), &"a"));
