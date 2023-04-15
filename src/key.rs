@@ -63,8 +63,8 @@ impl<'a, B> Deref for MaybeBorrowed<'a, B> {
 }
 
 /// A trait to enable splitting and recombining keys into a `Hi` and `Lo` component.
-/// 
-/// A given value must ensure that values are split and recombined correctly, and that 
+///
+/// A given value must ensure that values are split and recombined correctly, and that
 /// sort order is preserved, i.e. `self.cmp(rhs) == (self.hi, self.lo).cmp((rhs.hi, rhs.lo))`
 pub trait VebKey: Clone + Ord {
     type Hi: Clone + Ord;
@@ -700,11 +700,13 @@ mod test {
         for lhs in i16::MIN..=i16::MAX {
             for rhs in i16::MIN..=i16::MAX {
                 let (lhs, rhs) = (MaybeBorrowed::Owned(lhs), MaybeBorrowed::Owned(rhs));
-                i16::split(lhs, |lh, ll| i16::split(rhs, |rh, rl|{
-                    let (lh, ll) = (lh.into_or_clone(), ll.into_or_clone());
-                    let (rh, rl) = (rh.into_or_clone(), rl.into_or_clone());
-                    assert_eq!(lhs.cmp(&rhs), (lh, ll).cmp(&(rh, rl)));
-                }))
+                i16::split(lhs, |lh, ll| {
+                    i16::split(rhs, |rh, rl| {
+                        let (lh, ll) = (lh.into_or_clone(), ll.into_or_clone());
+                        let (rh, rl) = (rh.into_or_clone(), rl.into_or_clone());
+                        assert_eq!(lhs.cmp(&rhs), (lh, ll).cmp(&(rh, rl)));
+                    })
+                })
             }
         }
     }

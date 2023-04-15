@@ -54,7 +54,7 @@ impl<V: VebTree> TreeList for VecDeque<V> {
     where
         F: FnOnce(Self::Tree) -> RemoveResult<Self::Tree>,
     {
-        use vec_entry::{EntryExt, Entry};
+        use vec_entry::{Entry, EntryExt};
 
         let entry = match self.entry(i) {
             Entry::Occupied(o) => o,
@@ -66,7 +66,7 @@ impl<V: VebTree> TreeList for VecDeque<V> {
             let removed = tree.is_none();
             (tree, (val, removed))
         });
-        
+
         if self.is_empty() {
             debug_assert!(removed);
             (None, val)
@@ -78,20 +78,18 @@ impl<V: VebTree> TreeList for VecDeque<V> {
     where
         F: FnOnce(Self::Tree) -> MaybeRemoveResult<Self::Tree>,
     {
-        use vec_entry::{EntryExt, Entry};
+        use vec_entry::{Entry, EntryExt};
 
         let entry = match self.entry(i) {
             Entry::Occupied(o) => o,
             Entry::Vacant(_) => unreachable!(),
         };
 
-        let (_, removed) = entry.replace_entry_with(|_, tree| {
-            match f(tree) {
-                Err(tree) => (Some(tree), None),
-                Ok((tree, val)) => {
-                    let removed = tree.is_none();
-                    (tree, Some((val, removed)))
-                }
+        let (_, removed) = entry.replace_entry_with(|_, tree| match f(tree) {
+            Err(tree) => (Some(tree), None),
+            Ok((tree, val)) => {
+                let removed = tree.is_none();
+                (tree, Some((val, removed)))
             }
         });
 
@@ -99,11 +97,9 @@ impl<V: VebTree> TreeList for VecDeque<V> {
             Some((val, removed)) if self.is_empty() => {
                 debug_assert!(removed);
                 Ok((None, val))
-            },
-            Some((val, removed)) => {
-                Ok((Some((self, removed)), val))
-            },
-            None => Err(self)
+            }
+            Some((val, removed)) => Ok((Some((self, removed)), val)),
+            None => Err(self),
         }
     }
 }

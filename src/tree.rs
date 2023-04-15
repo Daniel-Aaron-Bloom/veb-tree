@@ -705,7 +705,8 @@ mod test {
 
     use crate::{
         key::MaybeBorrowed,
-        VebTree, markers::{VebTreeType, Marker32, Marker16},
+        markers::{Marker16, Marker32, VebTreeType},
+        VebTree,
     };
 
     fn verify<K, V, T>(

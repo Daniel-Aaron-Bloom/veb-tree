@@ -1,7 +1,11 @@
 use alloc::boxed::Box;
 use ghost::phantom;
 
-use crate::{tree::{VebTreeMarker, TreeMarker}, bitset::{ByteSetMarker, ByteTreeMarker, VecDequeMarker}, collection::array::ArrayTreeCollectionMarker};
+use crate::{
+    bitset::{ByteSetMarker, ByteTreeMarker, VecDequeMarker},
+    collection::array::ArrayTreeCollectionMarker,
+    tree::{TreeMarker, VebTreeMarker},
+};
 
 #[phantom]
 pub struct BoxMarker<#[invariant] T>;
@@ -16,44 +20,61 @@ pub type Marker8Empty = ByteSetMarker;
 pub type Marker8 = ByteTreeMarker<VecDequeMarker>;
 
 pub type Marker16Empty = TreeMarker<
-    Marker8Empty,                        // Summary
-    ArrayTreeCollectionMarker<BoxMarker< // Children
-        Marker8Empty                     // Child "tree"
-    >>
+    Marker8Empty, // Summary
+    ArrayTreeCollectionMarker<
+        BoxMarker<
+            // Children
+            Marker8Empty, // Child "tree"
+        >,
+    >,
 >;
 pub type Marker16 = TreeMarker<
-    Marker8Empty,                        // Summary
-    ArrayTreeCollectionMarker<BoxMarker< // Children
-        Marker8                          // Child "tree"
-    >>
+    Marker8Empty, // Summary
+    ArrayTreeCollectionMarker<
+        BoxMarker<
+            // Children
+            Marker8, // Child "tree"
+        >,
+    >,
 >;
 
 pub type Marker32Empty = TreeMarker<
-    Marker16Empty,                       // Summary
-    ArrayTreeCollectionMarker<BoxMarker< // Children
-        Marker16Empty                    // Child tree
-    >>
+    Marker16Empty, // Summary
+    ArrayTreeCollectionMarker<
+        BoxMarker<
+            // Children
+            Marker16Empty, // Child tree
+        >,
+    >,
 >;
 pub type Marker32 = TreeMarker<
-    Marker16Empty,                       // Summary
-    ArrayTreeCollectionMarker<BoxMarker< // Children
-        Marker16                         // Child "tree"
-    >>
+    Marker16Empty, // Summary
+    ArrayTreeCollectionMarker<
+        BoxMarker<
+            // Children
+            Marker16, // Child "tree"
+        >,
+    >,
 >;
 
 pub type Marker64Empty = TreeMarker<
-    Marker32Empty,                       // Summary
-    ArrayTreeCollectionMarker<BoxMarker< // Children
-        Marker32Empty                    // Child tree
-    >>
+    Marker32Empty, // Summary
+    ArrayTreeCollectionMarker<
+        BoxMarker<
+            // Children
+            Marker32Empty, // Child tree
+        >,
+    >,
 >;
 pub type Marker64 = TreeMarker<
-    Marker32Empty,                       // Summary
-    ArrayTreeCollectionMarker<BoxMarker< // Children
-        Marker32                         // Child "tree"
-    >>
+    Marker32Empty, // Summary
+    ArrayTreeCollectionMarker<
+        BoxMarker<
+            // Children
+            Marker32, // Child "tree"
+        >,
+    >,
 >;
-
 
 // //VebTree
 // type U32Marker = TreeMarker<
