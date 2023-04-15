@@ -77,15 +77,19 @@ impl ByteSet {
         ]
     }
 
+    #[inline(always)]
     pub(crate) fn is_present(&self, k: u8) -> bool {
         self.0[k as usize / 128] & (1 << (k % 128)) != 0
     }
+    #[inline(always)]
     pub(crate) fn set_bit(&mut self, k: u8) {
         Self::array_set_bit(&mut self.0, k);
     }
+    #[inline(always)]
     pub(crate) fn array_set_bit(a: &mut [u128; 2], k: u8) {
         a[k as usize / 128] |= 1 << (k % 128);
     }
+    #[inline(always)]
     pub(crate) fn unset_bit(&mut self, k: u8) {
         self.0[k as usize / 128] &= !(1 << (k % 128));
     }
@@ -108,6 +112,7 @@ impl VebTree for ByteSet {
         Self::array_set_bit(&mut a, k);
         Self(a, v)
     }
+    #[inline(always)]
     fn is_monad(&self) -> bool {
         self.len() == 1
     }

@@ -10,17 +10,20 @@ use rand::{
 use std::{collections::BTreeMap, time::Duration};
 
 use veb_tree::{
-    markers::{Marker32, VebTreeType},
+    markers::{Marker32, VebTreeType, Marker32Empty},
     SizedVebTree, VebTree,
 };
 
+pub type U32TreeSet = SizedVebTree<VebTreeType<u32, (), Marker32Empty>>;
+pub type U32TreeMap = SizedVebTree<VebTreeType<u32, f32, Marker32>>;
+
 // type Data = f32;
 // const DATA: Data = 5.4;
+// type U32Tree = U32TreeMap;
 
 type Data = ();
 const DATA: Data = ();
-
-type U32Tree = SizedVebTree<VebTreeType<u32, Data, Marker32>>;
+type U32Tree = U32TreeSet;
 
 trait VEBOperations {
     fn len(&self) -> usize;
