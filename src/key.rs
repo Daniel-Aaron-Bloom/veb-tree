@@ -73,24 +73,15 @@ impl<'a, B> Deref for MaybeBorrowed<'a, B> {
 ///
 /// A given value must ensure that values are split and recombined correctly, and that
 /// sort order is preserved, i.e. `self.cmp(rhs) == (self.hi, self.lo).cmp((rhs.hi, rhs.lo))`
-pub trait VebKey: Clone + Ord {
-    type Hi: Clone + Ord;
-    type Lo: Clone + Ord;
+pub trait VebKey: Ord {
+    type Hi: Ord;
+    type Lo: Ord;
 
     fn split_val(self) -> (Self::Hi, Self::Lo);
-    #[inline(always)]
-    fn split_ref<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&Self::Hi, &Self::Lo) -> R,
-    {
-        let (hi, lo) = self.clone().split_val();
-        f(&hi, &lo)
-    }
-
-    fn join<'a>(_hi: MaybeBorrowed<'a, Self::Hi>, _lo: MaybeBorrowed<'a, Self::Lo>) -> Self;
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self;
 }
 
-pub trait VebKeyRef<Hi, Lo> {
+pub trait VebKeyRef<Hi: Ord, Lo: Ord> {
     fn split_ref<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&Hi, &Lo) -> R;
@@ -554,15 +545,17 @@ impl<T: Clone + Ord> VebKey for [T; 2] {
         (hi, lo)
     }
     #[inline(always)]
-    fn split_ref<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&Self::Hi, &Self::Lo) -> R,
-    {
-        f(&self[0], &self[1])
-    }
-    #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
         [hi.into_or_clone(), lo.into_or_clone()]
+    }
+}
+impl<T: Ord> VebKeyRef<T, T> for [T; 2] {
+    #[inline(always)]
+    fn split_ref<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&T, &T) -> R,
+    {
+        f(&self[0], &self[1])
     }
 }
 
@@ -575,17 +568,19 @@ impl<T: Clone + Ord> VebKey for [T; 3] {
         (hi, lo)
     }
     #[inline(always)]
-    fn split_ref<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&Self::Hi, &Self::Lo) -> R,
-    {
-        let [hi, lo @ ..] = self;
-        f(hi, lo)
-    }
-    #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
         let (hi, [lo0, lo1]) = (hi.into_or_clone(), lo.into_or_clone());
         [hi, lo0, lo1]
+    }
+}
+impl<T: Ord> VebKeyRef<T, [T; 2]> for [T; 3] {
+    #[inline(always)]
+    fn split_ref<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&T, &[T; 2]) -> R,
+    {
+        let [hi, lo @ ..] = self;
+        f(hi, lo)
     }
 }
 impl<T: Clone + Ord> VebKey for [T; 4] {
@@ -597,18 +592,20 @@ impl<T: Clone + Ord> VebKey for [T; 4] {
         ([h0, h1], lo)
     }
     #[inline(always)]
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
+        let ([hi0, hi1], [lo0, lo1]) = (hi.into_or_clone(), lo.into_or_clone());
+        [hi0, hi1, lo0, lo1]
+    }
+}
+impl<T: Ord> VebKeyRef<[T; 2], [T; 2]> for [T; 4] {
+    #[inline(always)]
     fn split_ref<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&Self::Hi, &Self::Lo) -> R,
+        F: FnOnce(&[T; 2], &[T; 2]) -> R,
     {
         let [hi @ .., _, _] = self;
         let [_, _, lo @ ..] = self;
         f(hi, lo)
-    }
-    #[inline(always)]
-    fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
-        let ([hi0, hi1], [lo0, lo1]) = (hi.into_or_clone(), lo.into_or_clone());
-        [hi0, hi1, lo0, lo1]
     }
 }
 impl<T: Clone + Ord> VebKey for [T; 5] {
@@ -620,18 +617,20 @@ impl<T: Clone + Ord> VebKey for [T; 5] {
         ([h0, h1], lo)
     }
     #[inline(always)]
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
+        let ([hi0, hi1], [lo0, lo1, lo2]) = (hi.into_or_clone(), lo.into_or_clone());
+        [hi0, hi1, lo0, lo1, lo2]
+    }
+}
+impl<T: Ord> VebKeyRef<[T; 2], [T; 3]> for [T; 5] {
+    #[inline(always)]
     fn split_ref<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&Self::Hi, &Self::Lo) -> R,
+        F: FnOnce(&[T; 2], &[T; 3]) -> R,
     {
         let [hi @ .., _, _, _] = self;
         let [_, _, lo @ ..] = self;
         f(hi, lo)
-    }
-    #[inline(always)]
-    fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
-        let ([hi0, hi1], [lo0, lo1, lo2]) = (hi.into_or_clone(), lo.into_or_clone());
-        [hi0, hi1, lo0, lo1, lo2]
     }
 }
 impl<T: Clone + Ord> VebKey for [T; 6] {
@@ -643,18 +642,20 @@ impl<T: Clone + Ord> VebKey for [T; 6] {
         ([h0, h1, h2], lo)
     }
     #[inline(always)]
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
+        let ([hi0, hi1, hi2], [lo0, lo1, lo2]) = (hi.into_or_clone(), lo.into_or_clone());
+        [hi0, hi1, hi2, lo0, lo1, lo2]
+    }
+}
+impl<T: Ord> VebKeyRef<[T; 3], [T; 3]> for [T; 6] {
+    #[inline(always)]
     fn split_ref<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&Self::Hi, &Self::Lo) -> R,
+        F: FnOnce(&[T; 3], &[T; 3]) -> R,
     {
         let [hi @ .., _, _, _] = self;
         let [_, _, _, lo @ ..] = self;
         f(hi, lo)
-    }
-    #[inline(always)]
-    fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
-        let ([hi0, hi1, hi2], [lo0, lo1, lo2]) = (hi.into_or_clone(), lo.into_or_clone());
-        [hi0, hi1, hi2, lo0, lo1, lo2]
     }
 }
 impl<T: Clone + Ord> VebKey for [T; 7] {
@@ -666,18 +667,20 @@ impl<T: Clone + Ord> VebKey for [T; 7] {
         ([h0, h1, h2], lo)
     }
     #[inline(always)]
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
+        let ([hi0, hi1, hi2], [lo0, lo1, lo2, lo3]) = (hi.into_or_clone(), lo.into_or_clone());
+        [hi0, hi1, hi2, lo0, lo1, lo2, lo3]
+    }
+}
+impl<T: Ord> VebKeyRef<[T; 3], [T; 4]> for [T; 7] {
+    #[inline(always)]
     fn split_ref<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&Self::Hi, &Self::Lo) -> R,
+        F: FnOnce(&[T; 3], &[T; 4]) -> R,
     {
         let [hi @ .., _, _, _, _] = self;
         let [_, _, _, lo @ ..] = self;
         f(hi, lo)
-    }
-    #[inline(always)]
-    fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
-        let ([hi0, hi1, hi2], [lo0, lo1, lo2, lo3]) = (hi.into_or_clone(), lo.into_or_clone());
-        [hi0, hi1, hi2, lo0, lo1, lo2, lo3]
     }
 }
 impl<T: Clone + Ord> VebKey for [T; 8] {
@@ -689,18 +692,20 @@ impl<T: Clone + Ord> VebKey for [T; 8] {
         ([h0, h1, h2, h3], lo)
     }
     #[inline(always)]
+    fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
+        let ([hi0, hi1, hi2, hi3], [lo0, lo1, lo2, lo3]) = (hi.into_or_clone(), lo.into_or_clone());
+        [hi0, hi1, hi2, hi3, lo0, lo1, lo2, lo3]
+    }
+}
+impl<T: Ord> VebKeyRef<[T; 4], [T; 4]> for [T; 8] {
+    #[inline(always)]
     fn split_ref<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&Self::Hi, &Self::Lo) -> R,
+        F: FnOnce(&[T; 4], &[T; 4]) -> R,
     {
         let [hi @ .., _, _, _, _] = self;
         let [_, _, _, _, lo @ ..] = self;
         f(hi, lo)
-    }
-    #[inline(always)]
-    fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
-        let ([hi0, hi1, hi2, hi3], [lo0, lo1, lo2, lo3]) = (hi.into_or_clone(), lo.into_or_clone());
-        [hi0, hi1, hi2, hi3, lo0, lo1, lo2, lo3]
     }
 }
 impl<T: Clone + Ord> VebKey for [T; 16] {
@@ -712,21 +717,23 @@ impl<T: Clone + Ord> VebKey for [T; 16] {
         ([h0, h1, h2, h3, h4, h5, h6, h7], lo)
     }
     #[inline(always)]
-    fn split_ref<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&Self::Hi, &Self::Lo) -> R,
-    {
-        let [hi @ .., _, _, _, _, _, _, _, _] = self;
-        let [_, _, _, _, _, _, _, _, lo @ ..] = self;
-        f(hi, lo)
-    }
-    #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
         let ([hi0, hi1, hi2, hi3, hi4, hi5, hi6, hi7], [lo0, lo1, lo2, lo3, lo4, lo5, lo6, lo7]) =
             (hi.into_or_clone(), lo.into_or_clone());
         [
             hi0, hi1, hi2, hi3, hi4, hi5, hi6, hi7, lo0, lo1, lo2, lo3, lo4, lo5, lo6, lo7,
         ]
+    }
+}
+impl<T: Ord> VebKeyRef<[T; 8], [T; 8]> for [T; 16] {
+    #[inline(always)]
+    fn split_ref<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&[T; 8], &[T; 8]) -> R,
+    {
+        let [hi @ .., _, _, _, _, _, _, _, _] = self;
+        let [_, _, _, _, _, _, _, _, lo @ ..] = self;
+        f(hi, lo)
     }
 }
 

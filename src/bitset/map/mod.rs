@@ -131,6 +131,7 @@ where
 impl<L: list::List> VebTree for ByteMap<L> {
     type Key = u8;
     type Value = L::Value;
+
     fn from_monad(key: Self::Key, val: Self::Value) -> Self {
         let mut list = L::create();
         list.insert_value(0, val);
@@ -139,9 +140,11 @@ impl<L: list::List> VebTree for ByteMap<L> {
             list,
         }
     }
+
     fn is_monad(&self) -> bool {
         self.list.len() == 1
     }
+
     fn into_monad(mut self) -> Result<TreeKV<Self>, Self> {
         match self.set.into_monad() {
             Ok((k, ())) => {
@@ -155,81 +158,83 @@ impl<L: list::List> VebTree for ByteMap<L> {
             }
         }
     }
+
     fn min_val(&self) -> (MaybeBorrowed<Self::Key>, &Self::Value) {
         (self.set.min_val().0, self.list.get(0))
     }
+
     fn min_val_mut(&mut self) -> (MaybeBorrowed<Self::Key>, &mut Self::Value) {
         (self.set.min_val().0, self.list.get_mut(0))
     }
+
     fn max_val(&self) -> (MaybeBorrowed<Self::Key>, &Self::Value) {
         (self.set.max_val().0, self.list.get(self.list.len() - 1))
     }
+
     fn max_val_mut(&mut self) -> (MaybeBorrowed<Self::Key>, &mut Self::Value) {
         (self.set.max_val().0, self.list.get_mut(self.list.len() - 1))
     }
-    fn find<'a, Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+
+    fn find<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
     where
-        Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a,
+        Q: Borrow<Self::Key>,
     {
-        let k = *k.into();
+        let k = *k.borrow();
         let (k, ()) = self.set.find(k)?;
         let i = self.set.count_below(*k.borrow());
         Some((k, self.list.get(i)))
     }
-    fn find_mut<'a, Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+
+    fn find_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
     where
-        Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a,
+        Q: Borrow<Self::Key>,
     {
-        let k = *k.into();
+        let k = *k.borrow();
         let (k, ()) = self.set.find(k)?;
         let i = self.set.count_below(*k.borrow());
         Some((k, self.list.get_mut(i)))
     }
-    fn predecessor<'a, Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+
+    fn predecessor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
     where
-        Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a,
+        Q: Borrow<Self::Key>,
     {
-        let k = *k.into();
+        let k = *k.borrow();
         let (k, ()) = self.set.predecessor(k)?;
         let i = self.set.count_below(*k.borrow());
         Some((k, self.list.get(i)))
     }
-    fn predecessor_mut<'a, Q>(
-        &mut self,
-        k: Q,
-    ) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+
+    fn predecessor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
     where
-        Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a,
+        Q: Borrow<Self::Key>,
     {
-        let k = *k.into();
+        let k = *k.borrow();
         let (k, ()) = self.set.predecessor(k)?;
         let i = self.set.count_below(*k.borrow());
         Some((k, self.list.get_mut(i)))
     }
-    fn successor<'a, Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+
+    fn successor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
     where
-        Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a,
+        Q: Borrow<Self::Key>,
     {
-        let k = *k.into();
+        let k = *k.borrow();
         let (k, ()) = self.set.successor(k)?;
         let i = self.set.count_below(*k.borrow());
         Some((k, self.list.get(i)))
     }
-    fn successor_mut<'a, Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+
+    fn successor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
     where
-        Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a,
+        Q: Borrow<Self::Key>,
     {
-        let k = *k.into();
+        let k = *k.borrow();
         let (k, ()) = self.set.successor(k)?;
         let i = self.set.count_below(*k.borrow());
         Some((k, self.list.get_mut(i)))
     }
+
     fn insert(&mut self, k: Self::Key, v: Self::Value) -> Option<TreeKV<Self>> {
         match self.set.insert(k, ()) {
             Some((k, ())) => {
@@ -244,12 +249,12 @@ impl<L: list::List> VebTree for ByteMap<L> {
             }
         }
     }
-    fn remove<'a, Q>(mut self, k: Q) -> MaybeRemoveResult<Self>
+
+    fn remove<Q>(mut self, k: Q) -> MaybeRemoveResult<Self>
     where
-        Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a,
+        Q: Borrow<Self::Key>,
     {
-        let k = *k.into();
+        let k = *k.borrow();
         let i = self.set.count_below(k);
         match self.set.remove(k) {
             Err(set) => {
@@ -279,6 +284,7 @@ impl<L: list::List> VebTree for ByteMap<L> {
             _ => unreachable!(),
         }
     }
+
     fn remove_max(self) -> RemoveResult<Self> {
         let i = self.set.count_below(*self.set.max_val().0);
         let (set, (k, ())) = self.set.remove_max();

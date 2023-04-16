@@ -1,4 +1,4 @@
-use core::ops::BitAndAssign;
+use core::{borrow::Borrow, ops::BitAndAssign};
 
 use crate::{key::MaybeBorrowed, tree::VebTreeMarker, MaybeRemoveResult, VebTree};
 
@@ -139,24 +139,22 @@ impl VebTree for ByteSet {
         (MaybeBorrowed::Owned(self.highest()), &mut self.1)
     }
 
-    fn find<'a, Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    fn find<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
     where
-        Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a,
+        Q: Borrow<Self::Key>,
     {
-        let k = k.into().into_or_clone();
+        let k = *k.borrow();
         if self.is_present(k) {
             Some((MaybeBorrowed::Owned(k), &self.1))
         } else {
             None
         }
     }
-    fn find_mut<'a, Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn find_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
     where
-        Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a,
+        Q: Borrow<Self::Key>,
     {
-        let k = k.into().into_or_clone();
+        let k = *k.borrow();
         if self.is_present(k) {
             Some((MaybeBorrowed::Owned(k), &mut self.1))
         } else {
@@ -164,42 +162,35 @@ impl VebTree for ByteSet {
         }
     }
 
-    fn predecessor<'a, Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    fn predecessor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
     where
-        Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a,
+        Q: Borrow<Self::Key>,
     {
-        let mut k = Self::mask_lower(k.into().into_or_clone());
+        let mut k = Self::mask_lower(*k.borrow());
         k &= *self;
         Self::from_array(k).map(|v| (MaybeBorrowed::Owned(v.highest()), &self.1))
     }
-    fn predecessor_mut<'a, Q>(
-        &mut self,
-        k: Q,
-    ) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn predecessor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
     where
-        Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a,
+        Q: Borrow<Self::Key>,
     {
-        let mut k = Self::mask_lower(k.into().into_or_clone());
+        let mut k = Self::mask_lower(*k.borrow());
         k &= *self;
         Self::from_array(k).map(|v| (MaybeBorrowed::Owned(v.highest()), &mut self.1))
     }
-    fn successor<'a, Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    fn successor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
     where
-        Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a,
+        Q: Borrow<Self::Key>,
     {
-        let mut k = Self::mask_higher(k.into().into_or_clone());
+        let mut k = Self::mask_higher(*k.borrow());
         k &= *self;
         Self::from_array(k).map(|v| (MaybeBorrowed::Owned(v.lowest()), &self.1))
     }
-    fn successor_mut<'a, Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn successor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
     where
-        Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a,
+        Q: Borrow<Self::Key>,
     {
-        let mut k = Self::mask_higher(k.into().into_or_clone());
+        let mut k = Self::mask_higher(*k.borrow());
         k &= *self;
         Self::from_array(k).map(|v| (MaybeBorrowed::Owned(v.lowest()), &mut self.1))
     }
@@ -212,12 +203,11 @@ impl VebTree for ByteSet {
         }
     }
 
-    fn remove<'a, Q>(mut self, k: Q) -> MaybeRemoveResult<Self>
+    fn remove<Q>(mut self, k: Q) -> MaybeRemoveResult<Self>
     where
-        Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a,
+        Q: Borrow<Self::Key>,
     {
-        let k = k.into().into_or_clone();
+        let k = *k.borrow();
         if !self.is_present(k) {
             Err(self)
         } else if self.len() == 1 {

@@ -3,7 +3,7 @@ use core::{borrow::Borrow, cmp::Ordering, mem::replace};
 use ghost::phantom;
 
 use crate::collection::{SuperTreeCollection, TreeCollection, VebTreeCollectionMarker};
-use crate::key::{MaybeBorrowed, VebKey};
+use crate::key::{MaybeBorrowed, VebKey, VebKeyRef};
 use crate::VebTree;
 
 pub trait VebTreeMarker<K, V> {
@@ -15,7 +15,7 @@ pub struct TreeMarker<#[invariant] Summary, #[invariant] Children>;
 
 impl<K, V, Summary, Children> VebTreeMarker<K, V> for TreeMarker<Summary, Children>
 where
-    K: VebKey,
+    K: VebKey + VebKeyRef<K::Hi, K::Lo>,
     Summary: VebTreeMarker<K::Hi, ()>,
     Children: VebTreeCollectionMarker<K, V>,
 {
@@ -78,7 +78,7 @@ where
 
 impl<Summary, Children, K, V> VebTree for Tree<K, V, Summary, Children>
 where
-    K: VebKey,
+    K: VebKey + VebKeyRef<K::Hi, K::Lo>,
     Summary: VebTreeMarker<K::Hi, ()>,
     Children: VebTreeCollectionMarker<K, V>,
 {
@@ -138,13 +138,12 @@ where
     }
 
     /// O(lg lg K)
-    fn find<'a, Q>(&self, k: Q) -> Option<(MaybeBorrowed<K>, &Self::Value)>
+    fn find<Q>(&self, k: Q) -> Option<(MaybeBorrowed<K>, &Self::Value)>
     where
-        Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a,
+        Q: Borrow<Self::Key>,
     {
-        let k = k.into();
         use Ordering::*;
+        let k = k.borrow();
         match k.cmp(&self.min.0) {
             Less => return None,
             Equal => return Some((MaybeBorrowed::Borrowed(&self.min.0), &self.min.1)),
@@ -154,7 +153,7 @@ where
             None => return None,
             Some(data) => data,
         };
-        if *k.borrow() == data.max.0 {
+        if *k == data.max.0 {
             return Some((MaybeBorrowed::Borrowed(&data.max.0), &data.max.1));
         }
         let children = match &data.children {
@@ -162,7 +161,7 @@ where
             Some((_, children)) => children,
         };
 
-        K::split_ref(&*k, |hi, lo| {
+        k.split_ref(|hi, lo| {
             // Try to find the child where `k` is expected to live (identified by `hi`)
             // Then ask that node for the successor to `lo`. This is expected to short circuit if `lo` is outside the range of `child`
             let (lo, val) = children.get(hi)?.find(lo)?;
@@ -172,14 +171,13 @@ where
     }
 
     /// O(lg lg K)
-    fn find_mut<'a, Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<K>, &mut Self::Value)>
+    fn find_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<K>, &mut Self::Value)>
     where
-        Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a,
+        Q: Borrow<Self::Key>,
     {
-        let k = k.into();
         use Ordering::*;
-        match k.borrow().cmp(&self.min.0) {
+        let k = k.borrow();
+        match k.cmp(&self.min.0) {
             Less => return None,
             Equal => return Some((MaybeBorrowed::Borrowed(&self.min.0), &mut self.min.1)),
             Greater => {}
@@ -196,7 +194,7 @@ where
             Some((_, children)) => children,
         };
 
-        K::split_ref(&*k, |hi, lo| {
+        k.split_ref(|hi, lo| {
             // Try to find the child where `k` is expected to live (identified by `hi`)
             // Then ask that node for the successor to `lo`. This is expected to short circuit if `lo` is outside the range of `child`
             let (lo, val) = children.get_mut(&*hi)?.find_mut(lo)?;
@@ -206,13 +204,12 @@ where
     }
 
     /// O(lg lg K)
-    fn predecessor<'a, Q>(&self, k: Q) -> Option<(MaybeBorrowed<K>, &V)>
+    fn predecessor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<K>, &V)>
     where
-        Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a,
+        Q: Borrow<Self::Key>,
     {
-        let k = k.into();
-        if *k.borrow() <= self.min.0 {
+        let k = k.borrow();
+        if *k <= self.min.0 {
             return None;
         }
         let data = match self.data.as_ref() {
@@ -220,7 +217,7 @@ where
             Some(data) => data,
         };
 
-        let (summary, children) = match (k.borrow().cmp(&data.max.0), data.children.as_ref()) {
+        let (summary, children) = match (k.cmp(&data.max.0), data.children.as_ref()) {
             (Ordering::Greater, _) => {
                 return Some((MaybeBorrowed::Borrowed(&data.max.0), &data.max.1))
             }
@@ -236,7 +233,7 @@ where
             (Ordering::Less, Some((summary, children))) => (summary, children),
         };
 
-        K::split_ref(&*k, |hi, lo| {
+        k.split_ref(|hi, lo| {
             // Try to find the child where `k` is expected to live (identified by `hi`)
             // Then ask that node for the predecessor to `lo`. This is expected to short circuit if `lo` is outside the range of `child`
             let lo = children.get(&*hi).and_then(|child| child.predecessor(lo));
@@ -258,13 +255,12 @@ where
     }
 
     /// O(lg lg K)
-    fn predecessor_mut<'a, Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<K>, &mut V)>
+    fn predecessor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<K>, &mut V)>
     where
-        Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a,
+        Q: Borrow<Self::Key>,
     {
-        let k = k.into();
-        if *k.borrow() <= self.min.0 {
+        let k = k.borrow();
+        if *k <= self.min.0 {
             return None;
         }
 
@@ -273,7 +269,7 @@ where
             Some(data) => data,
         };
 
-        let (summary, children) = match (k.borrow().cmp(&data.max.0), data.children.as_mut()) {
+        let (summary, children) = match (k.cmp(&data.max.0), data.children.as_mut()) {
             (Ordering::Greater, _) => {
                 return Some((MaybeBorrowed::Borrowed(&data.max.0), &mut data.max.1))
             }
@@ -291,7 +287,7 @@ where
             (Ordering::Less, Some((summary, children))) => (summary, children),
         };
 
-        K::split_ref(&*k, |hi, lo| {
+        k.split_ref(|hi, lo| {
             // FIXME: rust-lang/rust#43234
             // Remove this polonius hack when NLL works
             use polonius_the_crab::{polonius, WithLifetime};
@@ -355,13 +351,12 @@ where
     }
 
     /// O(lg lg K)
-    fn successor<'a, Q>(&self, k: Q) -> Option<(MaybeBorrowed<K>, &V)>
+    fn successor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<K>, &V)>
     where
-        Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a,
+        Q: Borrow<Self::Key>,
     {
-        let k = k.into();
-        if *k.borrow() < self.min.0 {
+        let k = k.borrow();
+        if *k < self.min.0 {
             return Some((MaybeBorrowed::Borrowed(&self.min.0), &self.min.1));
         }
         let data = match self.data.as_ref() {
@@ -369,21 +364,21 @@ where
             None => return None,
             Some(data) => data,
         };
-        if *k.borrow() >= data.max.0 {
+        if *k >= data.max.0 {
             return None;
         }
         let (summary, children) = match data.children.as_ref() {
             None => return Some((MaybeBorrowed::Borrowed(&data.max.0), &data.max.1)),
             Some((summary, children)) => (summary, children),
         };
-        if *k.borrow() == self.min.0 {
+        if *k == self.min.0 {
             let (hi, ()) = summary.min_val();
             let child = children.get(&hi).unwrap();
             let (lo, val) = child.min_val();
             return Some((MaybeBorrowed::Owned(K::join(hi.into(), lo.into())), val));
         }
 
-        K::split_ref(&*k, |hi, lo| {
+        k.split_ref(|hi, lo| {
             // Try to find the child where `k` is expected to live (identified by `hi`)
             // Then ask that node for the successor to `lo`. This is expected to short circuit if `lo` is outside the range of `child`
             let lo = children.get(hi).and_then(|child| child.successor(lo));
@@ -404,13 +399,12 @@ where
     }
 
     /// O(lg lg K)
-    fn successor_mut<'a, 'b, Q>(&'b mut self, k: Q) -> Option<(MaybeBorrowed<'b, K>, &'b mut V)>
+    fn successor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<K>, &mut V)>
     where
-        Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a,
+        Q: Borrow<Self::Key>,
     {
-        let k = k.into();
-        if *k.borrow() < self.min.0 {
+        let k = k.borrow();
+        if *k < self.min.0 {
             return Some((MaybeBorrowed::Borrowed(&self.min.0), &mut self.min.1));
         }
         let data = match self.data.as_mut() {
@@ -418,21 +412,21 @@ where
             None => return None,
             Some(data) => data,
         };
-        if *k.borrow() >= data.max.0 {
+        if *k >= data.max.0 {
             return None;
         }
         let (summary, children) = match data.children.as_mut() {
             None => return Some((MaybeBorrowed::Borrowed(&data.max.0), &mut data.max.1)),
             Some((summary, children)) => (summary, children),
         };
-        if *k.borrow() == self.min.0 {
+        if *k == self.min.0 {
             let (hi, ()) = summary.min_val();
             let child = children.get_mut(&hi).unwrap();
             let (lo, val) = child.min_val_mut();
             return Some((MaybeBorrowed::Owned(K::join(hi.into(), lo.into())), val));
         }
 
-        K::split_ref(&*k, |hi, lo| {
+        k.split_ref(|hi, lo| {
             // FIXME: rust-lang/rust#43234
             // Remove this polonius hack when NLL works
             use polonius_the_crab::{polonius, WithLifetime};
@@ -556,13 +550,12 @@ where
     }
 
     /// O(lg lg K)
-    fn remove<'a, Q>(mut self, k: Q) -> Result<(Option<Self>, (Self::Key, Self::Value)), Self>
+    fn remove<Q>(mut self, k: Q) -> Result<(Option<Self>, (Self::Key, Self::Value)), Self>
     where
-        Q: Into<MaybeBorrowed<'a, Self::Key>>,
-        Self::Key: 'a,
+        Q: Borrow<Self::Key>,
     {
-        let k = k.into();
-        if self.min.0 == *k.borrow() {
+        let k = k.borrow();
+        if *k == self.min.0 {
             return Ok(self.remove_min());
         }
 
@@ -574,7 +567,7 @@ where
 
         let (summary, children) = match data.children {
             // No children found max
-            None if data.max.0 == *k.borrow() => return Ok((Some(self), data.max)),
+            None if data.max.0 == *k => return Ok((Some(self), data.max)),
 
             // No children but not max
             // so revert the take
@@ -585,7 +578,7 @@ where
             Some((summary, children)) => (summary, children),
         };
 
-        if data.max.0 == *k.borrow() {
+        if *k == data.max.0 {
             // Start by looking for the largest subtree
             let (hi, ()) = summary.max_val();
             // We should always find an entry, since we're starting from the summary
@@ -605,7 +598,7 @@ where
             return Ok((Some(self), data.max));
         }
 
-        K::split_ref(&*k, |hi, lo| {
+        k.split_ref(|hi, lo| {
             let (children, lo) = match children.maybe_remove_key(hi, |v| v.remove(lo)) {
                 Err(children) => (Some((summary, children)), None),
                 Ok((None, res)) => (None, Some(res)),

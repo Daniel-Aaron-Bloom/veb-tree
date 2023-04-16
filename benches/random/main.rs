@@ -24,6 +24,7 @@ pub type U32TreeMap = SizedVebTree<VebTreeType<u32, f32, Marker32>>;
 type Data = ();
 const DATA: Data = ();
 type U32Tree = U32TreeSet;
+//type U32Tree = BTreeMap<u32, Data>;
 
 trait VEBOperations {
     fn len(&self) -> usize;

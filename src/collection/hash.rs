@@ -23,7 +23,7 @@ pub struct HashMapMarker<#[invariant] Tree = (), #[invariant] S = DefaultHashBui
 impl<K, V, Tree, S> VebTreeCollectionMarker<K, V> for HashMapMarker<Tree, S>
 where
     K: VebKey,
-    K::Hi: Hash,
+    K::Hi: Clone+Hash,
     Tree: VebTreeMarker<K::Lo, V>,
     S: BuildHasher + Default,
 {
