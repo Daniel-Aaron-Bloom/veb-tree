@@ -57,15 +57,9 @@ impl<L: list::TreeList> TreeCollection for ByteMap<L> {
         Some(self.list.get_mut(self.set.count_below(*h)))
     }
 
-    fn insert_key<'a, Q>(&mut self, h: Q, (l, v): CollectionKV<Self>) -> TreeInsertResult<'a, Self>
-    where
-        Q: Into<MaybeBorrowed<'a, Self::Hi>>,
-        Self::Hi: 'a,
-    {
-        let h = h.into();
-        let k = *h;
-        let i = self.set.count_below(k);
-        let v = if let Some(_) = self.set.insert(k, ()) {
+    fn insert_key(&mut self, h: Self::Hi, (l, v): CollectionKV<Self>) -> TreeInsertResult<Self> {
+        let i = self.set.count_below(h);
+        let v = if let Some(_) = self.set.insert(h, ()) {
             Err((h, self.list.get_mut(i).insert(l, v)))
         } else {
             self.list.insert_tree(i, VebTree::from_monad(l, v));

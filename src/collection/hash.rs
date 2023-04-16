@@ -12,7 +12,7 @@ use crate::{
         CollectionKV, TreeCollection, TreeInsertResult, TreeMaybeRemoveResult, TreeRemoveResult,
         VebTreeCollectionMarker,
     },
-    key::{MaybeBorrowed, VebKey},
+    key::VebKey,
     tree::VebTreeMarker,
     MaybeRemoveResult, RemoveResult, VebTree,
 };
@@ -54,22 +54,11 @@ where
         self.get_mut(h)
     }
 
-    fn insert_key<'a, Q>(
-        &'a mut self,
-        h: Q,
-        (l, v): CollectionKV<Self>,
-    ) -> TreeInsertResult<'a, Self>
-    where
-        Q: Into<MaybeBorrowed<'a, Self::Hi>>,
-        Self::Hi: 'a,
-    {
-        let h = h.into();
+    fn insert_key(&mut self, h: Self::Hi, (l, v): CollectionKV<Self>) -> TreeInsertResult<Self> {
         use hashbrown::hash_map::RawEntryMut;
-        let mut entry = match self.raw_entry_mut().from_key(&*h) {
+        let mut entry = match self.raw_entry_mut().from_key(&h) {
             RawEntryMut::Vacant(entry) => {
-                return Ok(MaybeBorrowed::Borrowed(
-                    entry.insert(h.into_or_clone(), V::from_monad(l, v)).0,
-                ))
+                return Ok(entry.insert(h, V::from_monad(l, v)).0.clone())
             }
             RawEntryMut::Occupied(entry) => entry,
         };

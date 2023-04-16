@@ -162,12 +162,12 @@ where
             Some((_, children)) => children,
         };
 
-        K::split(k, |hi, lo| {
+        K::split_ref(&*k, |hi, lo| {
             // Try to find the child where `k` is expected to live (identified by `hi`)
             // Then ask that node for the successor to `lo`. This is expected to short circuit if `lo` is outside the range of `child`
-            let (lo, val) = children.get(&*hi)?.find(lo)?;
+            let (lo, val) = children.get(hi)?.find(lo)?;
 
-            Some((MaybeBorrowed::Owned(K::join(hi, lo.into())), val))
+            Some((MaybeBorrowed::Owned(K::join(hi.into(), lo.into())), val))
         })
     }
 
@@ -196,12 +196,12 @@ where
             Some((_, children)) => children,
         };
 
-        K::split(k, |hi, lo| {
+        K::split_ref(&*k, |hi, lo| {
             // Try to find the child where `k` is expected to live (identified by `hi`)
             // Then ask that node for the successor to `lo`. This is expected to short circuit if `lo` is outside the range of `child`
             let (lo, val) = children.get_mut(&*hi)?.find_mut(lo)?;
 
-            Some((MaybeBorrowed::Owned(K::join(hi, lo.into())), val))
+            Some((MaybeBorrowed::Owned(K::join(hi.into(), lo.into())), val))
         })
     }
 
@@ -236,16 +236,16 @@ where
             (Ordering::Less, Some((summary, children))) => (summary, children),
         };
 
-        K::split(k, |hi, lo| {
+        K::split_ref(&*k, |hi, lo| {
             // Try to find the child where `k` is expected to live (identified by `hi`)
             // Then ask that node for the predecessor to `lo`. This is expected to short circuit if `lo` is outside the range of `child`
             let lo = children.get(&*hi).and_then(|child| child.predecessor(lo));
             if let Some((lo, val)) = lo {
-                return Some((MaybeBorrowed::Owned(K::join(hi, lo.into())), val));
+                return Some((MaybeBorrowed::Owned(K::join(hi.into(), lo.into())), val));
             }
 
             // If we didn't find it, find the predecessor to `hi` in the summary and use the `min` of that node
-            if let Some((hi, ())) = summary.predecessor(&*hi) {
+            if let Some((hi, ())) = summary.predecessor(hi) {
                 let hi: MaybeBorrowed<K::Hi> = hi.into();
                 let child = children.get(&hi).unwrap();
                 let (lo, val) = child.max_val();
@@ -291,7 +291,7 @@ where
             (Ordering::Less, Some((summary, children))) => (summary, children),
         };
 
-        K::split(k, |hi, lo| {
+        K::split_ref(&*k, |hi, lo| {
             // FIXME: rust-lang/rust#43234
             // Remove this polonius hack when NLL works
             use polonius_the_crab::{polonius, WithLifetime};
@@ -309,7 +309,7 @@ where
                 fn get_mut_predecessor_mut<'lt>(
                     &'lt mut self,
                     hi: &Self::Hi,
-                    lo: MaybeBorrowed<Self::Lo>,
+                    lo: &Self::Lo,
                 ) -> Option<(MaybeBorrowed<'lt, Self::Lo>, &'lt mut Self::V)>;
             }
             impl<T: TreeCollection> PoloniusExt for T {
@@ -319,14 +319,13 @@ where
                 fn get_mut_predecessor_mut<'lt>(
                     &'lt mut self,
                     hi: &Self::Hi,
-                    lo: MaybeBorrowed<Self::Lo>,
+                    lo: &Self::Lo,
                 ) -> Option<(MaybeBorrowed<'lt, Self::Lo>, &'lt mut Self::V)> {
                     self.get_mut(hi).and_then(|child| child.predecessor_mut(lo))
                 }
             }
 
             let polonius = {
-                let hi = &*hi;
                 polonius::<RetRef<K, V>, _, _, _>(children, move |children| {
                     // Polonius hates doing this in the lambda
                     // children.get_mut(hi).and_then(|child| child.successor_mut(lo)).ok_or(())
@@ -336,7 +335,9 @@ where
             };
 
             let children = match polonius {
-                Ok((lo, val)) => return Some((MaybeBorrowed::Owned(K::join(hi, lo.into())), val)),
+                Ok((lo, val)) => {
+                    return Some((MaybeBorrowed::Owned(K::join(hi.into(), lo.into())), val))
+                }
                 Err((children, ())) => children,
             };
 
@@ -382,16 +383,16 @@ where
             return Some((MaybeBorrowed::Owned(K::join(hi.into(), lo.into())), val));
         }
 
-        K::split(k, |hi, lo| {
+        K::split_ref(&*k, |hi, lo| {
             // Try to find the child where `k` is expected to live (identified by `hi`)
             // Then ask that node for the successor to `lo`. This is expected to short circuit if `lo` is outside the range of `child`
-            let lo = children.get(&*hi).and_then(|child| child.successor(lo));
+            let lo = children.get(hi).and_then(|child| child.successor(lo));
             if let Some((lo, val)) = lo {
-                return Some((MaybeBorrowed::Owned(K::join(hi, lo.into())), val));
+                return Some((MaybeBorrowed::Owned(K::join(hi.into(), lo.into())), val));
             }
 
             // If we didn't find it, find the successor to `hi` in the summary and use the `min` of that node
-            if let Some((hi, ())) = summary.successor(&*hi) {
+            if let Some((hi, ())) = summary.successor(hi) {
                 let child = children.get(&hi).unwrap();
                 let (lo, val) = child.min_val();
                 return Some((MaybeBorrowed::Owned(K::join(hi.into(), lo.into())), val));
@@ -431,7 +432,7 @@ where
             return Some((MaybeBorrowed::Owned(K::join(hi.into(), lo.into())), val));
         }
 
-        K::split(k, |hi, lo| {
+        K::split_ref(&*k, |hi, lo| {
             // FIXME: rust-lang/rust#43234
             // Remove this polonius hack when NLL works
             use polonius_the_crab::{polonius, WithLifetime};
@@ -449,7 +450,7 @@ where
                 fn get_mut_successor_mut<'lt>(
                     &'lt mut self,
                     hi: &Self::Hi,
-                    lo: MaybeBorrowed<Self::Lo>,
+                    lo: &Self::Lo,
                 ) -> Option<(MaybeBorrowed<'lt, Self::Lo>, &'lt mut Self::V)>;
             }
             impl<T: TreeCollection> PoloniusExt for T {
@@ -459,14 +460,13 @@ where
                 fn get_mut_successor_mut<'lt>(
                     &'lt mut self,
                     hi: &Self::Hi,
-                    lo: MaybeBorrowed<Self::Lo>,
+                    lo: &Self::Lo,
                 ) -> Option<(MaybeBorrowed<'lt, Self::Lo>, &'lt mut Self::V)> {
                     self.get_mut(hi).and_then(|child| child.successor_mut(lo))
                 }
             }
 
             let polonius = {
-                let hi = &*hi;
                 polonius::<RetRef<K, V>, _, _, _>(children, move |children| {
                     // Polonius hates doing this in the lambda
                     // children.get_mut(hi).and_then(|child| child.successor_mut(lo)).ok_or(())
@@ -475,7 +475,9 @@ where
                 })
             };
             let children = match polonius {
-                Ok((lo, val)) => return Some((MaybeBorrowed::Owned(K::join(hi, lo.into())), val)),
+                Ok((lo, val)) => {
+                    return Some((MaybeBorrowed::Owned(K::join(hi.into(), lo.into())), val))
+                }
                 Err((children, ())) => children,
             };
 
@@ -493,13 +495,12 @@ where
 
     /// O(lg lg K)
     fn insert(&mut self, k: K, v: V) -> Option<(K, V)> {
-        let k = MaybeBorrowed::Borrowed(k.borrow());
         // See if `k` should take the place of `min`. If so, swap them and store the previous `min` in subtrees
-        let (k, v, data) = match (k.borrow().cmp(&self.min.0), self.data.as_mut()) {
-            (Ordering::Equal, _) => return Some(replace(&mut self.min, (k.into_or_clone(), v))),
+        let (k, v, data) = match (k.cmp(&self.min.0), self.data.as_mut()) {
+            (Ordering::Equal, _) => return Some(replace(&mut self.min, (k, v))),
             // Monad path
             (Ordering::Less, None) => {
-                let max = replace(&mut self.min, (k.into_or_clone(), v));
+                let max = replace(&mut self.min, (k, v));
                 self.data = Some(TreeData {
                     max,
                     children: None,
@@ -507,7 +508,7 @@ where
                 return None;
             }
             (Ordering::Greater, None) => {
-                let max = (k.into_or_clone(), v);
+                let max = (k, v);
                 self.data = Some(TreeData {
                     max,
                     children: None,
@@ -515,45 +516,43 @@ where
                 return None;
             }
             (Ordering::Less, Some(data)) => {
-                let (k, v) = replace(&mut self.min, (k.into_or_clone(), v));
+                let (k, v) = replace(&mut self.min, (k, v));
                 let (k, v) = match data.max.0.cmp(&k) {
                     Ordering::Equal => return Some(replace(&mut data.max, (k, v))),
                     Ordering::Greater => replace(&mut data.max, (k, v)),
                     Ordering::Less => (k, v),
                 };
 
-                (MaybeBorrowed::Owned(k), v, data)
+                (k, v, data)
             }
             (Ordering::Greater, Some(data)) => match k.borrow().cmp(&data.max.0) {
-                Ordering::Equal => return Some(replace(&mut data.max, (k.into_or_clone(), v))),
+                Ordering::Equal => return Some(replace(&mut data.max, (k, v))),
                 Ordering::Greater => {
-                    let (k, v) = replace(&mut data.max, (k.into_or_clone(), v));
-                    (MaybeBorrowed::Owned(k), v, data)
+                    let (k, v) = replace(&mut data.max, (k, v));
+                    (k, v, data)
                 }
                 Ordering::Less => (k, v, data),
             },
         };
 
-        K::split(k, |hi, lo| {
-            if let Some((mut summary, mut children)) = data.children.take() {
-                let r = match children.insert_key(hi, (lo.into_or_clone(), v)) {
-                    Ok(hi) => {
-                        summary.insert(hi.into_or_clone(), ());
-                        None
-                    }
-                    Err((_, None)) => None,
-                    Err((hi, Some((lo, v)))) => Some((K::join(hi, lo.into()), v)),
-                };
-                data.children = Some((summary, children));
-                r
-            } else {
-                let children =
-                    TC::<Children, K, V>::create(&*hi, VebTree::from_monad(lo.into_or_clone(), v));
-                let summary = <Summary::Tree as VebTree>::from_monad(hi.into_or_clone(), ());
-                data.children = Some((summary, children));
-                None
-            }
-        })
+        let (hi, lo) = k.split_val();
+        if let Some((mut summary, mut children)) = data.children.take() {
+            let r = match children.insert_key(hi, (lo, v)) {
+                Ok(hi) => {
+                    summary.insert(hi, ());
+                    None
+                }
+                Err((_, None)) => None,
+                Err((hi, Some((lo, v)))) => Some((K::join(MaybeBorrowed::Owned(hi), lo.into()), v)),
+            };
+            data.children = Some((summary, children));
+            r
+        } else {
+            let children = TC::<Children, K, V>::create(&hi, VebTree::from_monad(lo, v));
+            let summary = <Summary::Tree as VebTree>::from_monad(hi, ());
+            data.children = Some((summary, children));
+            None
+        }
     }
 
     /// O(lg lg K)
@@ -606,13 +605,13 @@ where
             return Ok((Some(self), data.max));
         }
 
-        K::split(k, |hi, lo| {
-            let (children, lo) = match children.maybe_remove_key(&*hi, |v| v.remove(lo)) {
+        K::split_ref(&*k, |hi, lo| {
+            let (children, lo) = match children.maybe_remove_key(hi, |v| v.remove(lo)) {
                 Err(children) => (Some((summary, children)), None),
                 Ok((None, res)) => (None, Some(res)),
                 Ok((Some((children, false)), res)) => (Some((summary, children)), Some(res)),
                 Ok((Some((children, true)), res)) => (
-                    Some((summary.remove(&*hi).ok().unwrap().0.unwrap(), children)),
+                    Some((summary.remove(hi).ok().unwrap().0.unwrap(), children)),
                     Some(res),
                 ),
             };
@@ -622,7 +621,7 @@ where
                 children,
             });
             if let Some((lo, val)) = lo {
-                Ok((Some(self), (K::join(hi, lo.into()), val)))
+                Ok((Some(self), (K::join(hi.into(), lo.into()), val)))
             } else {
                 Err(self)
             }

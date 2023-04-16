@@ -4,7 +4,7 @@ use core::{
     ops::{BitOr, Shl, Shr},
 };
 
-use typenum::{op, Unsigned, U1, U128, U16, U32, U64, U8};
+use typenum::{op, Unsigned, U1, U128, U16, U2 as _U2, U32, U4 as _U4, U64, U8};
 
 #[derive(Clone, Copy, Debug, Eq)]
 pub enum MaybeBorrowed<'a, B> {
@@ -16,23 +16,27 @@ impl<'l, 'r, L, R> PartialEq<MaybeBorrowed<'r, R>> for MaybeBorrowed<'l, L>
 where
     L: PartialEq<R>,
 {
+    #[inline(always)]
     fn eq(&self, other: &MaybeBorrowed<'r, R>) -> bool {
         **self == **other
     }
 }
 
 impl<'a, B> From<B> for MaybeBorrowed<'a, B> {
+    #[inline(always)]
     fn from(b: B) -> Self {
         Self::Owned(b)
     }
 }
 impl<'a, B> From<&'a B> for MaybeBorrowed<'a, B> {
+    #[inline(always)]
     fn from(b: &'a B) -> Self {
         Self::Borrowed(b)
     }
 }
 
 impl<'a, B: Clone> MaybeBorrowed<'a, B> {
+    #[inline(always)]
     pub fn into_or_clone(self) -> B {
         match self {
             Self::Borrowed(b) => b.clone(),
@@ -41,12 +45,14 @@ impl<'a, B: Clone> MaybeBorrowed<'a, B> {
     }
 }
 impl<'a, B> MaybeBorrowed<'a, B> {
+    #[inline(always)]
     pub fn borrow(&'a self) -> Self {
         Self::Borrowed(&*self)
     }
 }
 
 impl<'a, B> Borrow<B> for MaybeBorrowed<'a, B> {
+    #[inline(always)]
     fn borrow(&self) -> &B {
         &*self
     }
@@ -54,6 +60,7 @@ impl<'a, B> Borrow<B> for MaybeBorrowed<'a, B> {
 
 impl<'a, B> Deref for MaybeBorrowed<'a, B> {
     type Target = B;
+    #[inline(always)]
     fn deref(&self) -> &B {
         match self {
             Self::Borrowed(b) => b,
@@ -70,10 +77,36 @@ pub trait VebKey: Clone + Ord {
     type Hi: Clone + Ord;
     type Lo: Clone + Ord;
 
-    fn split<'o, F, R>(_v: MaybeBorrowed<'o, Self>, _f: F) -> R
+    fn split_val(self) -> (Self::Hi, Self::Lo);
+    #[inline(always)]
+    fn split_ref<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R;
+        F: FnOnce(&Self::Hi, &Self::Lo) -> R,
+    {
+        let (hi, lo) = self.clone().split_val();
+        f(&hi, &lo)
+    }
+
     fn join<'a>(_hi: MaybeBorrowed<'a, Self::Hi>, _lo: MaybeBorrowed<'a, Self::Lo>) -> Self;
+}
+
+pub trait VebKeyRef<Hi, Lo> {
+    fn split_ref<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&Hi, &Lo) -> R;
+}
+
+trait CloneVebKeyRef: VebKey + Clone + Ord {}
+
+impl<T: CloneVebKeyRef> VebKeyRef<T::Hi, T::Lo> for T {
+    #[inline(always)]
+    fn split_ref<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&T::Hi, &T::Lo) -> R,
+    {
+        let (hi, lo) = self.clone().split_val();
+        f(&hi, &lo)
+    }
 }
 
 pub trait SizedVebKey {
@@ -86,18 +119,15 @@ impl VebKey for () {
     type Hi = ();
     type Lo = ();
     #[inline(always)]
-    fn split<'o, F, R>(_v: MaybeBorrowed<'o, Self>, f: F) -> R
-    where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R,
-    {
-        use MaybeBorrowed::Owned;
-        f(Owned(()), Owned(()))
+    fn split_val(self) -> (Self::Hi, Self::Lo) {
+        ((), ())
     }
     #[inline(always)]
     fn join<'a>(_hi: MaybeBorrowed<'a, Self::Hi>, _lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
         ()
     }
 }
+impl CloneVebKeyRef for () {}
 impl SizedVebKey for () {
     const CARDINALITY: usize = 1;
     type Cardinality = typenum::U1;
@@ -110,13 +140,8 @@ impl VebKey for u128 {
     type Hi = u64;
     type Lo = u64;
     #[inline(always)]
-    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
-    where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R,
-    {
-        use MaybeBorrowed::Owned;
-        let v = v.into_or_clone();
-        f(Owned((v >> 64) as u64), Owned(v as u64))
+    fn split_val(self) -> (Self::Hi, Self::Lo) {
+        ((self >> Self::Lo::BITS) as Self::Hi, (self as Self::Lo))
     }
     #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
@@ -124,6 +149,7 @@ impl VebKey for u128 {
         hi << 64 | lo
     }
 }
+impl CloneVebKeyRef for u128 {}
 impl SizedVebKey for u128 {
     const CARDINALITY: usize = if usize::MAX as Self >= Self::MAX {
         u128::MAX as usize
@@ -141,19 +167,15 @@ impl VebKey for i128 {
     type Hi = u64;
     type Lo = u64;
     #[inline(always)]
-    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
-    where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R,
-    {
-        use MaybeBorrowed::Owned;
-        let v = v.into_or_clone().wrapping_sub(Self::MIN) as u128;
-        u128::split(Owned(v), f)
+    fn split_val(self) -> (Self::Hi, Self::Lo) {
+        self.abs_diff(Self::MIN).split_val()
     }
     #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
         (u128::join(hi, lo) as Self).wrapping_add(Self::MIN)
     }
 }
+impl CloneVebKeyRef for i128 {}
 impl SizedVebKey for i128 {
     const CARDINALITY: usize = if usize::MAX as u128 >= u128::MAX {
         u128::MAX as usize
@@ -171,13 +193,8 @@ impl VebKey for u64 {
     type Hi = u32;
     type Lo = u32;
     #[inline(always)]
-    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
-    where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R,
-    {
-        use MaybeBorrowed::Owned;
-        let v = v.into_or_clone();
-        f(Owned((v >> 32) as u32), Owned(v as u32))
+    fn split_val(self) -> (Self::Hi, Self::Lo) {
+        ((self >> Self::Lo::BITS) as Self::Hi, (self as Self::Lo))
     }
     #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
@@ -185,6 +202,7 @@ impl VebKey for u64 {
         hi << 32 | lo
     }
 }
+impl CloneVebKeyRef for u64 {}
 impl SizedVebKey for u64 {
     const CARDINALITY: usize = if usize::MAX as Self >= Self::MAX {
         Self::MAX as usize
@@ -202,20 +220,15 @@ impl VebKey for i64 {
     type Hi = u32;
     type Lo = u32;
     #[inline(always)]
-    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
-    where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R,
-    {
-        use MaybeBorrowed::Owned;
-        let v = v.into_or_clone().wrapping_sub(Self::MIN) as u64;
-        u64::split(Owned(v), f)
+    fn split_val(self) -> (Self::Hi, Self::Lo) {
+        self.abs_diff(Self::MIN).split_val()
     }
     #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
         (u64::join(hi, lo) as Self).wrapping_add(Self::MIN)
     }
 }
-
+impl CloneVebKeyRef for i64 {}
 impl SizedVebKey for i64 {
     const CARDINALITY: usize = if usize::MAX as u64 >= u64::MAX {
         u64::MAX as usize
@@ -233,13 +246,8 @@ impl VebKey for u32 {
     type Hi = u16;
     type Lo = u16;
     #[inline(always)]
-    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
-    where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R,
-    {
-        use MaybeBorrowed::Owned;
-        let v = v.into_or_clone();
-        f(Owned((v >> 16) as u16), Owned(v as u16))
+    fn split_val(self) -> (Self::Hi, Self::Lo) {
+        ((self >> Self::Lo::BITS) as Self::Hi, (self as Self::Lo))
     }
     #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
@@ -247,6 +255,7 @@ impl VebKey for u32 {
         hi << 16 | lo
     }
 }
+impl CloneVebKeyRef for u32 {}
 impl SizedVebKey for u32 {
     const CARDINALITY: usize = if usize::MAX as Self >= Self::MAX {
         Self::MAX as usize
@@ -264,19 +273,15 @@ impl VebKey for i32 {
     type Hi = u16;
     type Lo = u16;
     #[inline(always)]
-    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
-    where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R,
-    {
-        use MaybeBorrowed::Owned;
-        let v = v.into_or_clone().wrapping_sub(Self::MIN) as u32;
-        u32::split(Owned(v), f)
+    fn split_val(self) -> (Self::Hi, Self::Lo) {
+        self.abs_diff(Self::MIN).split_val()
     }
     #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
         (u32::join(hi, lo) as Self).wrapping_add(Self::MIN)
     }
 }
+impl CloneVebKeyRef for i32 {}
 impl SizedVebKey for i32 {
     const CARDINALITY: usize = if usize::MAX as u32 >= u32::MAX {
         u32::MAX as usize
@@ -294,13 +299,8 @@ impl VebKey for u16 {
     type Hi = u8;
     type Lo = u8;
     #[inline(always)]
-    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
-    where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R,
-    {
-        use MaybeBorrowed::Owned;
-        let v = v.into_or_clone();
-        f(Owned((v >> 8) as u8), Owned(v as u8))
+    fn split_val(self) -> (Self::Hi, Self::Lo) {
+        ((self >> Self::Lo::BITS) as Self::Hi, (self as Self::Lo))
     }
     #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
@@ -308,6 +308,7 @@ impl VebKey for u16 {
         hi << 8 | lo
     }
 }
+impl CloneVebKeyRef for u16 {}
 impl SizedVebKey for u16 {
     const CARDINALITY: usize = if usize::MAX as Self >= Self::MAX {
         Self::MAX as usize
@@ -325,19 +326,15 @@ impl VebKey for i16 {
     type Hi = u8;
     type Lo = u8;
     #[inline(always)]
-    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
-    where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R,
-    {
-        use MaybeBorrowed::Owned;
-        let v = v.into_or_clone().wrapping_sub(Self::MIN) as u16;
-        u16::split(Owned(v), f)
+    fn split_val(self) -> (Self::Hi, Self::Lo) {
+        self.abs_diff(Self::MIN).split_val()
     }
     #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
         (u16::join(hi, lo) as Self).wrapping_add(Self::MIN)
     }
 }
+impl CloneVebKeyRef for i16 {}
 impl SizedVebKey for i16 {
     const CARDINALITY: usize = if usize::MAX as u16 >= u16::MAX {
         u16::MAX as usize
@@ -355,13 +352,8 @@ impl VebKey for u8 {
     type Hi = U4;
     type Lo = U4;
     #[inline(always)]
-    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
-    where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R,
-    {
-        use MaybeBorrowed::Owned;
-        let v = v.into_or_clone();
-        f(Owned(U4(v >> 4)), Owned(U4(v & U4::MAX)))
+    fn split_val(self) -> (Self::Hi, Self::Lo) {
+        (Self::Hi::new(self >> Self::Lo::BITS), Self::Lo::from(self))
     }
     #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
@@ -369,6 +361,7 @@ impl VebKey for u8 {
         hi << 4 | lo
     }
 }
+impl CloneVebKeyRef for u8 {}
 impl SizedVebKey for u8 {
     const CARDINALITY: usize = if usize::MAX as u8 >= u8::MAX {
         u8::MAX as usize
@@ -386,19 +379,15 @@ impl VebKey for i8 {
     type Hi = U4;
     type Lo = U4;
     #[inline(always)]
-    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
-    where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R,
-    {
-        use MaybeBorrowed::Owned;
-        let v = v.into_or_clone().wrapping_sub(Self::MIN) as u8;
-        u8::split(Owned(v), f)
+    fn split_val(self) -> (Self::Hi, Self::Lo) {
+        self.abs_diff(Self::MIN).split_val()
     }
     #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
         (u8::join(hi, lo) as Self).wrapping_add(Self::MIN)
     }
 }
+impl CloneVebKeyRef for i8 {}
 impl SizedVebKey for i8 {
     const CARDINALITY: usize = if usize::MAX as u8 >= u8::MAX {
         u8::MAX as usize
@@ -416,7 +405,11 @@ impl SizedVebKey for i8 {
 pub struct U4(u8);
 
 impl U4 {
-    pub const MAX: u8 = u8::MAX >> 4;
+    pub const BITS: u32 = 4;
+    pub const MAX: u8 = u8::MAX >> (u8::BITS - Self::BITS);
+    const fn new(v: u8) -> Self {
+        Self(v)
+    }
 }
 
 impl From<u8> for U4 {
@@ -455,13 +448,11 @@ impl VebKey for U4 {
     type Hi = U2;
     type Lo = U2;
     #[inline(always)]
-    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
-    where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R,
-    {
-        use MaybeBorrowed::Owned;
-        let v = v.into_or_clone().0;
-        f(Owned(U2(v >> 2)), Owned(U2(v & U2::MAX)))
+    fn split_val(self) -> (Self::Hi, Self::Lo) {
+        (
+            Self::Hi::new(self.0 >> Self::Lo::BITS),
+            Self::Lo::from(self),
+        )
     }
     #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
@@ -469,12 +460,25 @@ impl VebKey for U4 {
         Self(hi << 2 | lo)
     }
 }
+impl CloneVebKeyRef for U4 {}
+impl SizedVebKey for U4 {
+    const CARDINALITY: usize = Self::MAX as usize;
+    type Cardinality = op!(U1 << _U4);
+    #[inline(always)]
+    fn index(&self) -> usize {
+        self.0 as usize
+    }
+}
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
-pub struct U2(pub u8);
+pub struct U2(u8);
 
 impl U2 {
-    pub const MAX: u8 = u8::MAX >> 6;
+    pub const BITS: u32 = 2;
+    pub const MAX: u8 = u8::MAX >> (u8::BITS - Self::BITS);
+    const fn new(v: u8) -> Self {
+        Self(v)
+    }
 }
 impl From<u8> for U2 {
     fn from(value: u8) -> Self {
@@ -522,13 +526,8 @@ impl VebKey for U2 {
     type Hi = bool;
     type Lo = bool;
     #[inline(always)]
-    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
-    where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R,
-    {
-        use MaybeBorrowed::Owned;
-        let v = v.into_or_clone().0;
-        f(Owned((v >> 1) != 0), Owned((v & true as u8) != 0))
+    fn split_val(self) -> (Self::Hi, Self::Lo) {
+        (self.0 >> 1 != 0, Self::Lo::from(self))
     }
     #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
@@ -536,17 +535,30 @@ impl VebKey for U2 {
         Self(hi << 1 | lo)
     }
 }
+impl CloneVebKeyRef for U2 {}
+impl SizedVebKey for U2 {
+    const CARDINALITY: usize = Self::MAX as usize;
+    type Cardinality = op!(U1 << _U2);
+    #[inline(always)]
+    fn index(&self) -> usize {
+        self.0 as usize
+    }
+}
 
 impl<T: Clone + Ord> VebKey for [T; 2] {
     type Hi = T;
     type Lo = T;
     #[inline(always)]
-    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
+    fn split_val(self) -> (Self::Hi, Self::Lo) {
+        let [hi, lo] = self;
+        (hi, lo)
+    }
+    #[inline(always)]
+    fn split_ref<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R,
+        F: FnOnce(&Self::Hi, &Self::Lo) -> R,
     {
-        use MaybeBorrowed::Borrowed;
-        f(Borrowed(&v[0]), Borrowed(&v[1]))
+        f(&self[0], &self[1])
     }
     #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
@@ -558,13 +570,17 @@ impl<T: Clone + Ord> VebKey for [T; 3] {
     type Hi = T;
     type Lo = [T; 2];
     #[inline(always)]
-    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
+    fn split_val(self) -> (Self::Hi, Self::Lo) {
+        let [hi, lo @ ..] = self;
+        (hi, lo)
+    }
+    #[inline(always)]
+    fn split_ref<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R,
+        F: FnOnce(&Self::Hi, &Self::Lo) -> R,
     {
-        use MaybeBorrowed::Borrowed;
-        let [hi, lo @ ..] = &*v;
-        f(Borrowed(hi), Borrowed(lo))
+        let [hi, lo @ ..] = self;
+        f(hi, lo)
     }
     #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
@@ -576,14 +592,18 @@ impl<T: Clone + Ord> VebKey for [T; 4] {
     type Hi = [T; 2];
     type Lo = [T; 2];
     #[inline(always)]
-    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
+    fn split_val(self) -> (Self::Hi, Self::Lo) {
+        let [h0, h1, lo @ ..] = self;
+        ([h0, h1], lo)
+    }
+    #[inline(always)]
+    fn split_ref<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R,
+        F: FnOnce(&Self::Hi, &Self::Lo) -> R,
     {
-        use MaybeBorrowed::Borrowed;
-        let [_, _, lo @ ..] = &*v;
-        let [hi @ .., _, _] = &*v;
-        f(Borrowed(hi), Borrowed(lo))
+        let [hi @ .., _, _] = self;
+        let [_, _, lo @ ..] = self;
+        f(hi, lo)
     }
     #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
@@ -595,14 +615,18 @@ impl<T: Clone + Ord> VebKey for [T; 5] {
     type Hi = [T; 2];
     type Lo = [T; 3];
     #[inline(always)]
-    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
+    fn split_val(self) -> (Self::Hi, Self::Lo) {
+        let [h0, h1, lo @ ..] = self;
+        ([h0, h1], lo)
+    }
+    #[inline(always)]
+    fn split_ref<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R,
+        F: FnOnce(&Self::Hi, &Self::Lo) -> R,
     {
-        use MaybeBorrowed::Borrowed;
-        let [_, _, lo @ ..] = &*v;
-        let [hi @ .., _, _, _] = &*v;
-        f(Borrowed(hi), Borrowed(lo))
+        let [hi @ .., _, _, _] = self;
+        let [_, _, lo @ ..] = self;
+        f(hi, lo)
     }
     #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
@@ -614,14 +638,18 @@ impl<T: Clone + Ord> VebKey for [T; 6] {
     type Hi = [T; 3];
     type Lo = [T; 3];
     #[inline(always)]
-    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
+    fn split_val(self) -> (Self::Hi, Self::Lo) {
+        let [h0, h1, h2, lo @ ..] = self;
+        ([h0, h1, h2], lo)
+    }
+    #[inline(always)]
+    fn split_ref<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R,
+        F: FnOnce(&Self::Hi, &Self::Lo) -> R,
     {
-        use MaybeBorrowed::Borrowed;
-        let [_, _, _, lo @ ..] = &*v;
-        let [hi @ .., _, _, _] = &*v;
-        f(Borrowed(hi), Borrowed(lo))
+        let [hi @ .., _, _, _] = self;
+        let [_, _, _, lo @ ..] = self;
+        f(hi, lo)
     }
     #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
@@ -633,14 +661,18 @@ impl<T: Clone + Ord> VebKey for [T; 7] {
     type Hi = [T; 3];
     type Lo = [T; 4];
     #[inline(always)]
-    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
+    fn split_val(self) -> (Self::Hi, Self::Lo) {
+        let [h0, h1, h2, lo @ ..] = self;
+        ([h0, h1, h2], lo)
+    }
+    #[inline(always)]
+    fn split_ref<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R,
+        F: FnOnce(&Self::Hi, &Self::Lo) -> R,
     {
-        use MaybeBorrowed::Borrowed;
-        let [_, _, _, lo @ ..] = &*v;
-        let [hi @ .., _, _, _, _] = &*v;
-        f(Borrowed(hi), Borrowed(lo))
+        let [hi @ .., _, _, _, _] = self;
+        let [_, _, _, lo @ ..] = self;
+        f(hi, lo)
     }
     #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
@@ -652,14 +684,18 @@ impl<T: Clone + Ord> VebKey for [T; 8] {
     type Hi = [T; 4];
     type Lo = [T; 4];
     #[inline(always)]
-    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
+    fn split_val(self) -> (Self::Hi, Self::Lo) {
+        let [h0, h1, h2, h3, lo @ ..] = self;
+        ([h0, h1, h2, h3], lo)
+    }
+    #[inline(always)]
+    fn split_ref<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R,
+        F: FnOnce(&Self::Hi, &Self::Lo) -> R,
     {
-        use MaybeBorrowed::Borrowed;
-        let [_, _, _, _, lo @ ..] = &*v;
-        let [hi @ .., _, _, _, _] = &*v;
-        f(Borrowed(hi), Borrowed(lo))
+        let [hi @ .., _, _, _, _] = self;
+        let [_, _, _, _, lo @ ..] = self;
+        f(hi, lo)
     }
     #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
@@ -671,14 +707,18 @@ impl<T: Clone + Ord> VebKey for [T; 16] {
     type Hi = [T; 8];
     type Lo = [T; 8];
     #[inline(always)]
-    fn split<'o, F, R>(v: MaybeBorrowed<'o, Self>, f: F) -> R
+    fn split_val(self) -> (Self::Hi, Self::Lo) {
+        let [h0, h1, h2, h3, h4, h5, h6, h7, lo @ ..] = self;
+        ([h0, h1, h2, h3, h4, h5, h6, h7], lo)
+    }
+    #[inline(always)]
+    fn split_ref<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(MaybeBorrowed<Self::Hi>, MaybeBorrowed<Self::Lo>) -> R,
+        F: FnOnce(&Self::Hi, &Self::Lo) -> R,
     {
-        use MaybeBorrowed::Borrowed;
-        let [_, _, _, _, _, _, _, _, lo @ ..] = &*v;
-        let [hi @ .., _, _, _, _, _, _, _, _] = &*v;
-        f(Borrowed(hi), Borrowed(lo))
+        let [hi @ .., _, _, _, _, _, _, _, _] = self;
+        let [_, _, _, _, _, _, _, _, lo @ ..] = self;
+        f(hi, lo)
     }
     #[inline(always)]
     fn join<'a>(hi: MaybeBorrowed<'a, Self::Hi>, lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
@@ -698,15 +738,10 @@ mod test {
     #[ignore]
     fn signed() {
         for lhs in i16::MIN..=i16::MAX {
+            let (lh, ll) = lhs.split_val();
             for rhs in i16::MIN..=i16::MAX {
-                let (lhs, rhs) = (MaybeBorrowed::Owned(lhs), MaybeBorrowed::Owned(rhs));
-                i16::split(lhs, |lh, ll| {
-                    i16::split(rhs, |rh, rl| {
-                        let (lh, ll) = (lh.into_or_clone(), ll.into_or_clone());
-                        let (rh, rl) = (rh.into_or_clone(), rl.into_or_clone());
-                        assert_eq!(lhs.cmp(&rhs), (lh, ll).cmp(&(rh, rl)));
-                    })
-                })
+                let (rh, rl) = rhs.split_val();
+                assert_eq!(lhs.cmp(&rhs), (lh, ll).cmp(&(rh, rl)));
             }
         }
     }

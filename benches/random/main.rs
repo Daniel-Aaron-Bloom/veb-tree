@@ -10,7 +10,7 @@ use rand::{
 use std::{collections::BTreeMap, time::Duration};
 
 use veb_tree::{
-    markers::{Marker32, VebTreeType, Marker32Empty},
+    markers::{Marker32, Marker32Empty, VebTreeType},
     SizedVebTree, VebTree,
 };
 
@@ -44,10 +44,10 @@ impl VEBOperations for Option<U32Tree> {
     fn insert(&mut self, x: u32) -> Option<Data> {
         let (v, r) = match self.take() {
             Some(mut v) => {
-                let r = v.insert(x, DATA);
+                let r = VebTree::insert(&mut v, x, DATA);
                 (v, r)
             }
-            None => (U32Tree::from_monad(x, DATA), None),
+            None => (VebTree::from_monad(x, DATA), None),
         };
         *self = Some(v);
         r.map(|(_k, v)| v)
@@ -113,7 +113,7 @@ impl VEBOperations for BTreeSetWrapper {
     }
 
     fn remove(&mut self, x: u32) -> Option<Data> {
-        self.0.remove(&x)
+        <BTreeMap<u32, Data>>::remove(&mut self.0, &x)
     }
 
     fn find(&self, x: u32) -> Option<&Data> {
@@ -186,6 +186,22 @@ fn criterion_benchmark(c: &mut Criterion) {
         }
         s
     };
+
+    // {
+    //     let distr = Uniform::from(0..i64::MAX);
+    //     let mut group = c.benchmark_group("micro");
+    //     group.warm_up_time(Duration::from_millis(5000));
+    //     group.measurement_time(Duration::from_millis(10000));
+    //     let mut rng = StdRng::seed_from_u64(0);
+    //     group.bench_function(BenchmarkId::from_parameter("abs_diff"), |b| {
+    //         b.iter_batched(|| rng.sample::<i64, _>(distr), |x| black_box(x).abs_diff(i64::MIN), BatchSize::SmallInput);
+    //     });
+    //     let mut rng = StdRng::seed_from_u64(0);
+    //     group.bench_function(BenchmarkId::from_parameter("wrapping_sub"), |b| {
+    //         b.iter_batched(|| rng.sample::<i64, _>(distr), |x| black_box(x).wrapping_sub(i64::MIN) as u64, BatchSize::SmallInput);
+    //     });
+
+    // }
 
     for_all_widths(
         c.benchmark_group(format!("insert-veb")),

@@ -8,11 +8,8 @@ use typenum::Unsigned;
 
 use crate::markers::BoxMarker;
 use crate::tree::VebTreeMarker;
+use crate::{key::SizedVebKey, RemoveResult, VebTree};
 use crate::{key::VebKey, MaybeRemoveResult};
-use crate::{
-    key::{MaybeBorrowed, SizedVebKey},
-    RemoveResult, VebTree,
-};
 
 use super::{
     CollectionKV, TreeCollection, TreeInsertResult, TreeMaybeRemoveResult, TreeRemoveResult,
@@ -121,12 +118,7 @@ where
         self.array.get_mut(h.index()).as_mut()
     }
 
-    fn insert_key<'a, Q>(&mut self, h: Q, (l, v): CollectionKV<Self>) -> TreeInsertResult<'a, Self>
-    where
-        Q: Into<MaybeBorrowed<'a, Self::Hi>>,
-        Self::Hi: 'a,
-    {
-        let h = h.into();
+    fn insert_key(&mut self, h: Self::Hi, (l, v): CollectionKV<Self>) -> TreeInsertResult<Self> {
         match self.array.get_mut(h.index()) {
             None => {
                 *self.array.get_mut(h.index()) = Some(A::V::from_monad(l, v));

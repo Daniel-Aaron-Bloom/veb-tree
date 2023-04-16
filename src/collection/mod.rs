@@ -2,8 +2,8 @@ use core::borrow::Borrow;
 
 use alloc::boxed::Box;
 
-use crate::{key::MaybeBorrowed, RemoveResult, TreeKV, VebTree};
 use crate::{key::VebKey, MaybeRemoveResult};
+use crate::{RemoveResult, TreeKV, VebTree};
 
 pub mod array;
 pub mod hash;
@@ -29,13 +29,8 @@ pub trait VebTreeCollectionMarker<K: VebKey, V> {
 
 pub type CollectionKV<TC> = TreeKV<<TC as TreeCollection>::Tree>;
 
-pub type TreeInsertResult<'a, TC> = Result<
-    MaybeBorrowed<'a, <TC as TreeCollection>::Hi>,
-    (
-        MaybeBorrowed<'a, <TC as TreeCollection>::Hi>,
-        Option<CollectionKV<TC>>,
-    ),
->;
+pub type TreeInsertResult<TC> =
+    Result<<TC as TreeCollection>::Hi, (<TC as TreeCollection>::Hi, Option<CollectionKV<TC>>)>;
 pub type TreeRemoveResult<TC> = (Option<(TC, bool)>, CollectionKV<TC>);
 pub type TreeMaybeRemoveResult<TC> = Result<TreeRemoveResult<TC>, TC>;
 
@@ -62,10 +57,7 @@ pub trait TreeCollection: Sized {
     ///
     /// Otherwise insertion on the existing tree is performed and any pre-existing values
     /// are returned
-    fn insert_key<'a, Q>(&'a mut self, h: Q, lv: CollectionKV<Self>) -> TreeInsertResult<'a, Self>
-    where
-        Q: Into<MaybeBorrowed<'a, Self::Hi>>,
-        Self::Hi: 'a;
+    fn insert_key(&mut self, h: Self::Hi, lv: CollectionKV<Self>) -> TreeInsertResult<Self>;
 
     /// Remove a value from a tree contained within.
     ///
@@ -104,11 +96,7 @@ impl<T: ?Sized + TreeCollection> TreeCollection for Box<T> {
         (**self).get_mut(h)
     }
 
-    fn insert_key<'a, Q>(&'a mut self, h: Q, lv: CollectionKV<Self>) -> TreeInsertResult<'a, Self>
-    where
-        Q: Into<MaybeBorrowed<'a, Self::Hi>>,
-        Self::Hi: 'a,
-    {
+    fn insert_key(&mut self, h: Self::Hi, lv: CollectionKV<Self>) -> TreeInsertResult<Self> {
         (**self).insert_key(h, lv)
     }
 
