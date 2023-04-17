@@ -17,7 +17,7 @@ use super::{
 };
 
 #[phantom]
-pub struct ArrayTreeCollectionMarker<#[invariant] Array>;
+pub struct ArrayTreeCollectionMarker<Array>;
 
 impl<K, V, A> VebTreeCollectionMarker<K, V> for ArrayTreeCollectionMarker<A>
 where
@@ -61,7 +61,7 @@ impl<V: VebTree, Cardinality: Unsigned> OptionArray<Cardinality> for Box<[Option
 }
 
 #[phantom]
-pub struct GenericArrayMarker<#[invariant] T>;
+pub struct GenericArrayMarker<T>;
 
 impl<K: SizedVebKey, V, Tree: VebTreeMarker<K, V>> ArrayMarker<K, V> for GenericArrayMarker<Tree>
 where

@@ -16,7 +16,7 @@ use crate::{
 pub mod list;
 
 #[phantom]
-pub struct ByteCollectionMarker<#[invariant] ListMarker, #[invariant] Val>;
+pub struct ByteCollectionMarker<ListMarker, Val>;
 
 impl<K, V, List, Tree> VebTreeCollectionMarker<K, V> for ByteCollectionMarker<List, Tree>
 where
@@ -119,7 +119,7 @@ impl<L: list::TreeList> TreeCollection for ByteMap<L> {
 }
 
 #[phantom]
-pub struct ByteTreeMarker<#[invariant] ListMarker>;
+pub struct ByteTreeMarker<ListMarker>;
 
 impl<V, List> VebTreeMarker<u8, V> for ByteTreeMarker<List>
 where

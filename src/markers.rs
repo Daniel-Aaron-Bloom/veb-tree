@@ -8,7 +8,7 @@ use crate::{
 };
 
 #[phantom]
-pub struct BoxMarker<#[invariant] T>;
+pub struct BoxMarker<T>;
 
 impl<K, V, T: VebTreeMarker<K, V>> VebTreeMarker<K, V> for BoxMarker<T> {
     type Tree = Box<T::Tree>;

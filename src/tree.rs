@@ -11,7 +11,7 @@ pub trait VebTreeMarker<K, V> {
 }
 
 #[phantom]
-pub struct TreeMarker<#[invariant] Summary, #[invariant] Children>;
+pub struct TreeMarker<Summary, Children>;
 
 impl<K, V, Summary, Children> VebTreeMarker<K, V> for TreeMarker<Summary, Children>
 where

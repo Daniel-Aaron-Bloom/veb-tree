@@ -18,7 +18,7 @@ use crate::{
 };
 
 #[phantom]
-pub struct HashMapMarker<#[invariant] Tree = (), #[invariant] S = DefaultHashBuilder>;
+pub struct HashMapMarker<Tree = (), S = DefaultHashBuilder>;
 
 impl<K, V, Tree, S> VebTreeCollectionMarker<K, V> for HashMapMarker<Tree, S>
 where
