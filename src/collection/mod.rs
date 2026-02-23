@@ -64,7 +64,7 @@ pub trait TreeCollection: Sized {
     /// If the tree containing the value is a monad, it will be removed from
     /// the collection. If there are no remaning trees the entire collection
     /// is erased.
-    fn remove_key<'a, Q, R>(self, h: Q, r: R) -> TreeRemoveResult<Self>
+    fn remove_key<Q, R>(self, h: Q, r: R) -> TreeRemoveResult<Self>
     where
         Q: Borrow<Self::Hi>,
         R: FnOnce(Self::Tree) -> RemoveResult<Self::Tree>;
@@ -74,13 +74,13 @@ pub trait TreeCollection: Sized {
     /// If the tree containing the value is a monad, it will be removed from
     /// the collection. If there are no remaning trees the entire collection
     /// is erased.
-    fn maybe_remove_key<'a, Q, R>(self, h: Q, r: R) -> TreeMaybeRemoveResult<Self>
+    fn maybe_remove_key<Q, R>(self, h: Q, r: R) -> TreeMaybeRemoveResult<Self>
     where
         Q: Borrow<Self::Hi>,
         R: FnOnce(Self::Tree) -> MaybeRemoveResult<Self::Tree>;
 }
 
-impl<T: ?Sized + TreeCollection> TreeCollection for Box<T> {
+impl<T: TreeCollection> TreeCollection for Box<T> {
     type Hi = T::Hi;
     type Tree = T::Tree;
 

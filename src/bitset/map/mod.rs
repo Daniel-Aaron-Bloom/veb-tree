@@ -59,7 +59,7 @@ impl<L: list::TreeList> TreeCollection for ByteMap<L> {
 
     fn insert_key(&mut self, h: Self::Hi, (l, v): CollectionKV<Self>) -> TreeInsertResult<Self> {
         let i = self.set.count_below(h);
-        let v = if let Some(_) = self.set.insert(h, ()) {
+        let v = if self.set.insert(h, ()).is_some() {
             Err((h, self.list.get_mut(i).insert(l, v)))
         } else {
             self.list.insert_tree(i, VebTree::from_monad(l, v));
@@ -159,23 +159,23 @@ impl<L: list::List> VebTree for ByteMap<L> {
         }
     }
 
-    fn min_val(&self) -> (MaybeBorrowed<Self::Key>, &Self::Value) {
+    fn min_val(&self) -> (MaybeBorrowed<'_, Self::Key>, &Self::Value) {
         (self.set.min_val().0, self.list.get(0))
     }
 
-    fn min_val_mut(&mut self) -> (MaybeBorrowed<Self::Key>, &mut Self::Value) {
+    fn min_val_mut(&mut self) -> (MaybeBorrowed<'_, Self::Key>, &mut Self::Value) {
         (self.set.min_val().0, self.list.get_mut(0))
     }
 
-    fn max_val(&self) -> (MaybeBorrowed<Self::Key>, &Self::Value) {
+    fn max_val(&self) -> (MaybeBorrowed<'_, Self::Key>, &Self::Value) {
         (self.set.max_val().0, self.list.get(self.list.len() - 1))
     }
 
-    fn max_val_mut(&mut self) -> (MaybeBorrowed<Self::Key>, &mut Self::Value) {
+    fn max_val_mut(&mut self) -> (MaybeBorrowed<'_, Self::Key>, &mut Self::Value) {
         (self.set.max_val().0, self.list.get_mut(self.list.len() - 1))
     }
 
-    fn find<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    fn find<Q>(&self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
@@ -185,7 +185,7 @@ impl<L: list::List> VebTree for ByteMap<L> {
         Some((k, self.list.get(i)))
     }
 
-    fn find_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn find_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &mut Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
@@ -195,7 +195,7 @@ impl<L: list::List> VebTree for ByteMap<L> {
         Some((k, self.list.get_mut(i)))
     }
 
-    fn predecessor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    fn predecessor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
@@ -205,7 +205,10 @@ impl<L: list::List> VebTree for ByteMap<L> {
         Some((k, self.list.get(i)))
     }
 
-    fn predecessor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn predecessor_mut<Q>(
+        &mut self,
+        k: Q,
+    ) -> Option<(MaybeBorrowed<'_, Self::Key>, &mut Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
@@ -215,7 +218,7 @@ impl<L: list::List> VebTree for ByteMap<L> {
         Some((k, self.list.get_mut(i)))
     }
 
-    fn successor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    fn successor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
@@ -225,7 +228,7 @@ impl<L: list::List> VebTree for ByteMap<L> {
         Some((k, self.list.get(i)))
     }
 
-    fn successor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn successor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &mut Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {

@@ -47,14 +47,14 @@ impl<'a, B: Clone> MaybeBorrowed<'a, B> {
 impl<'a, B> MaybeBorrowed<'a, B> {
     #[inline(always)]
     pub fn borrow(&'a self) -> Self {
-        Self::Borrowed(&*self)
+        Self::Borrowed(self)
     }
 }
 
 impl<'a, B> Borrow<B> for MaybeBorrowed<'a, B> {
     #[inline(always)]
     fn borrow(&self) -> &B {
-        &*self
+        self
     }
 }
 
@@ -114,9 +114,7 @@ impl VebKey for () {
         ((), ())
     }
     #[inline(always)]
-    fn join<'a>(_hi: MaybeBorrowed<'a, Self::Hi>, _lo: MaybeBorrowed<'a, Self::Lo>) -> Self {
-        ()
-    }
+    fn join<'a>(_hi: MaybeBorrowed<'a, Self::Hi>, _lo: MaybeBorrowed<'a, Self::Lo>) -> Self {}
 }
 impl CloneVebKeyRef for () {}
 impl SizedVebKey for () {

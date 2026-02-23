@@ -1,4 +1,3 @@
-use core::iter::repeat_with;
 use core::{borrow::Borrow, marker::PhantomData};
 
 use alloc::{boxed::Box, vec::Vec};
@@ -65,17 +64,17 @@ pub struct GenericArrayMarker<T>;
 
 impl<K: SizedVebKey, V, Tree: VebTreeMarker<K, V>> ArrayMarker<K, V> for GenericArrayMarker<Tree>
 where
-    K::Cardinality: ArrayLength<Option<Tree::Tree>>,
+    K::Cardinality: ArrayLength,
 {
     type Array = GenericArray<Option<Tree::Tree>, K::Cardinality>;
 }
 
-impl<V: VebTree, Cardinality: ArrayLength<Option<V>>> OptionArray<Cardinality>
+impl<V: VebTree, Cardinality: ArrayLength> OptionArray<Cardinality>
     for GenericArray<Option<V>, Cardinality>
 {
     type V = V;
     fn create() -> Self {
-        Self::from_exact_iter(repeat_with(|| None).take(Cardinality::USIZE)).unwrap()
+        Self::default()
     }
     fn get(&self, i: usize) -> &Option<Self::V> {
         &self[i]

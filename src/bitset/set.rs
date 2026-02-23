@@ -126,20 +126,20 @@ impl VebTree for ByteSet {
             Err(self)
         }
     }
-    fn min_val(&self) -> (MaybeBorrowed<Self::Key>, &Self::Value) {
+    fn min_val(&self) -> (MaybeBorrowed<'_, Self::Key>, &Self::Value) {
         (MaybeBorrowed::Owned(self.lowest()), &self.1)
     }
-    fn min_val_mut(&mut self) -> (MaybeBorrowed<Self::Key>, &mut Self::Value) {
+    fn min_val_mut(&mut self) -> (MaybeBorrowed<'_, Self::Key>, &mut Self::Value) {
         (MaybeBorrowed::Owned(self.lowest()), &mut self.1)
     }
-    fn max_val(&self) -> (MaybeBorrowed<Self::Key>, &Self::Value) {
+    fn max_val(&self) -> (MaybeBorrowed<'_, Self::Key>, &Self::Value) {
         (MaybeBorrowed::Owned(self.highest()), &self.1)
     }
-    fn max_val_mut(&mut self) -> (MaybeBorrowed<Self::Key>, &mut Self::Value) {
+    fn max_val_mut(&mut self) -> (MaybeBorrowed<'_, Self::Key>, &mut Self::Value) {
         (MaybeBorrowed::Owned(self.highest()), &mut self.1)
     }
 
-    fn find<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    fn find<Q>(&self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
@@ -150,7 +150,7 @@ impl VebTree for ByteSet {
             None
         }
     }
-    fn find_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn find_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &mut Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
@@ -162,7 +162,7 @@ impl VebTree for ByteSet {
         }
     }
 
-    fn predecessor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    fn predecessor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
@@ -170,7 +170,10 @@ impl VebTree for ByteSet {
         k &= *self;
         Self::from_array(k).map(|v| (MaybeBorrowed::Owned(v.highest()), &self.1))
     }
-    fn predecessor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn predecessor_mut<Q>(
+        &mut self,
+        k: Q,
+    ) -> Option<(MaybeBorrowed<'_, Self::Key>, &mut Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
@@ -178,7 +181,7 @@ impl VebTree for ByteSet {
         k &= *self;
         Self::from_array(k).map(|v| (MaybeBorrowed::Owned(v.highest()), &mut self.1))
     }
-    fn successor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    fn successor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
@@ -186,7 +189,7 @@ impl VebTree for ByteSet {
         k &= *self;
         Self::from_array(k).map(|v| (MaybeBorrowed::Owned(v.lowest()), &self.1))
     }
-    fn successor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn successor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &mut Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
@@ -229,7 +232,7 @@ impl VebTree for ByteSet {
     fn remove_max(mut self) -> (Option<Self>, (Self::Key, Self::Value)) {
         let k = self.highest();
         if self.len() == 1 {
-            return (None, (k, ()));
+            (None, (k, ()))
         } else {
             self.unset_bit(k);
             (Some(self), (k, ()))

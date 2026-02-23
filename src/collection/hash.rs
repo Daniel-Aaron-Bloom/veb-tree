@@ -4,7 +4,7 @@ use core::{
 };
 
 use ghost::phantom;
-use hashbrown::hash_map::DefaultHashBuilder;
+use hashbrown::DefaultHashBuilder;
 use hashbrown::HashMap;
 
 use crate::{
@@ -23,7 +23,7 @@ pub struct HashMapMarker<Tree = (), S = DefaultHashBuilder>;
 impl<K, V, Tree, S> VebTreeCollectionMarker<K, V> for HashMapMarker<Tree, S>
 where
     K: VebKey,
-    K::Hi: Clone+Hash,
+    K::Hi: Clone + Hash,
     Tree: VebTreeMarker<K::Lo, V>,
     S: BuildHasher + Default,
 {

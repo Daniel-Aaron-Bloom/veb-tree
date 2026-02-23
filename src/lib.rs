@@ -58,26 +58,26 @@ pub trait VebTree: Sized {
     /// Returns the minimum value stored in the tree
     ///
     /// Complexity is expected to be `O(1)`.
-    fn min_val(&self) -> (MaybeBorrowed<Self::Key>, &Self::Value);
+    fn min_val(&self) -> (MaybeBorrowed<'_, Self::Key>, &Self::Value);
 
     /// Returns the minimum value stored in the tree
     ///
     /// Complexity is expected to be `O(1)`.
-    fn min_val_mut(&mut self) -> (MaybeBorrowed<Self::Key>, &mut Self::Value);
+    fn min_val_mut(&mut self) -> (MaybeBorrowed<'_, Self::Key>, &mut Self::Value);
 
     /// Returns the maximum value stored in the tree
     ///
     /// Complexity is expected to be `O(1)`.
-    fn max_val(&self) -> (MaybeBorrowed<Self::Key>, &Self::Value);
+    fn max_val(&self) -> (MaybeBorrowed<'_, Self::Key>, &Self::Value);
 
     /// Returns the maximum value stored in the tree
     ///
     /// Complexity is expected to be `O(1)`.
-    fn max_val_mut(&mut self) -> (MaybeBorrowed<Self::Key>, &mut Self::Value);
+    fn max_val_mut(&mut self) -> (MaybeBorrowed<'_, Self::Key>, &mut Self::Value);
 
-    /// Gets the given key’s corresponding entry in the tree.
-    ///
-    /// Complexity is expected to be `O(lg lg K)`.
+    // Gets the given key’s corresponding entry in the tree.
+    //
+    // Complexity is expected to be `O(lg lg K)`.
     // fn entry<Q>(&self, k: Q) -> Entry<Self::Occupied<'_>, Self::Vacant<'_>>
     // where
     //     Q: Borrow<Self::Key> + Into<Owned<Self::Key>>;
@@ -85,42 +85,48 @@ pub trait VebTree: Sized {
     /// Find a key in the tree if present.
     ///
     /// Complexity is expected to be `O(lg lg K)`.
-    fn find<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    fn find<Q>(&self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &Self::Value)>
     where
         Q: Borrow<Self::Key>;
 
     /// Find a key in the tree if present.
     ///
     /// Complexity is expected to be `O(lg lg K)`.
-    fn find_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn find_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &mut Self::Value)>
     where
         Q: Borrow<Self::Key>;
 
     /// Find the predecessor to a key, if the tree contains such a value.
     ///
     /// Complexity is expected to be `O(lg lg K)`.
-    fn predecessor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    fn predecessor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &Self::Value)>
     where
         Q: Borrow<Self::Key>;
 
     /// Find the predecessor to a key, if the tree contains such a value.
     ///
     /// Complexity is expected to be `O(lg lg K)`.
-    fn predecessor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn predecessor_mut<Q>(
+        &mut self,
+        k: Q,
+    ) -> Option<(MaybeBorrowed<'_, Self::Key>, &mut Self::Value)>
     where
         Q: Borrow<Self::Key>;
 
     /// Find the predecessor to a key, if the tree contains such a value.
     ///
     /// Complexity is expected to be `O(lg lg K)`.
-    fn successor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    fn successor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &Self::Value)>
     where
         Q: Borrow<Self::Key>;
 
     /// Find the predecessor to a key, if the tree contains such a value.
     ///
     /// Complexity is expected to be `O(lg lg K)`.
-    fn successor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn successor_mut<Q>(
+        &mut self,
+        k: Q,
+    ) -> Option<(MaybeBorrowed<'_, Self::Key>, &mut Self::Value)>
     where
         Q: Borrow<Self::Key>;
 
@@ -133,7 +139,7 @@ pub trait VebTree: Sized {
     /// Removes a value from the tree
     ///
     /// Complexity is expected to be `O(lg lg K)`.
-    fn remove<'a, Q>(self, k: Q) -> MaybeRemoveResult<Self>
+    fn remove<Q>(self, k: Q) -> MaybeRemoveResult<Self>
     where
         Q: Borrow<Self::Key>;
 
@@ -384,58 +390,61 @@ impl<V: VebTree> VebTree for SizedVebTree<V> {
         })
     }
 
-    fn min_val(&self) -> (MaybeBorrowed<Self::Key>, &Self::Value) {
+    fn min_val(&self) -> (MaybeBorrowed<'_, Self::Key>, &Self::Value) {
         self.tree.min_val()
     }
 
-    fn min_val_mut(&mut self) -> (MaybeBorrowed<Self::Key>, &mut Self::Value) {
+    fn min_val_mut(&mut self) -> (MaybeBorrowed<'_, Self::Key>, &mut Self::Value) {
         self.tree.min_val_mut()
     }
 
-    fn max_val(&self) -> (MaybeBorrowed<Self::Key>, &Self::Value) {
+    fn max_val(&self) -> (MaybeBorrowed<'_, Self::Key>, &Self::Value) {
         self.tree.max_val()
     }
 
-    fn max_val_mut(&mut self) -> (MaybeBorrowed<Self::Key>, &mut Self::Value) {
+    fn max_val_mut(&mut self) -> (MaybeBorrowed<'_, Self::Key>, &mut Self::Value) {
         self.tree.max_val_mut()
     }
 
-    fn find<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    fn find<Q>(&self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
         self.tree.find(k)
     }
 
-    fn find_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn find_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &mut Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
         self.tree.find_mut(k)
     }
 
-    fn predecessor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    fn predecessor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
         self.tree.predecessor(k)
     }
 
-    fn predecessor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn predecessor_mut<Q>(
+        &mut self,
+        k: Q,
+    ) -> Option<(MaybeBorrowed<'_, Self::Key>, &mut Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
         self.tree.predecessor_mut(k)
     }
 
-    fn successor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    fn successor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
         self.tree.successor(k)
     }
 
-    fn successor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn successor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &mut Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
@@ -491,7 +500,7 @@ impl<V: VebTree> VebTree for SizedVebTree<V> {
     }
 }
 
-impl<V: ?Sized + VebTree> VebTree for Box<V> {
+impl<V: VebTree> VebTree for Box<V> {
     type Key = V::Key;
     type Value = V::Value;
 
@@ -511,58 +520,61 @@ impl<V: ?Sized + VebTree> VebTree for Box<V> {
         (*self).into_monad().map_err(Box::new)
     }
 
-    fn min_val(&self) -> (MaybeBorrowed<Self::Key>, &Self::Value) {
+    fn min_val(&self) -> (MaybeBorrowed<'_, Self::Key>, &Self::Value) {
         (**self).min_val()
     }
 
-    fn min_val_mut(&mut self) -> (MaybeBorrowed<Self::Key>, &mut Self::Value) {
+    fn min_val_mut(&mut self) -> (MaybeBorrowed<'_, Self::Key>, &mut Self::Value) {
         (**self).min_val_mut()
     }
 
-    fn max_val(&self) -> (MaybeBorrowed<Self::Key>, &Self::Value) {
+    fn max_val(&self) -> (MaybeBorrowed<'_, Self::Key>, &Self::Value) {
         (**self).max_val()
     }
 
-    fn max_val_mut(&mut self) -> (MaybeBorrowed<Self::Key>, &mut Self::Value) {
+    fn max_val_mut(&mut self) -> (MaybeBorrowed<'_, Self::Key>, &mut Self::Value) {
         (**self).max_val_mut()
     }
 
-    fn find<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    fn find<Q>(&self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
         (**self).find(k)
     }
 
-    fn find_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn find_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &mut Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
         (**self).find_mut(k)
     }
 
-    fn predecessor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    fn predecessor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
         (**self).predecessor(k)
     }
 
-    fn predecessor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn predecessor_mut<Q>(
+        &mut self,
+        k: Q,
+    ) -> Option<(MaybeBorrowed<'_, Self::Key>, &mut Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
         (**self).predecessor_mut(k)
     }
 
-    fn successor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    fn successor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
         (**self).successor(k)
     }
 
-    fn successor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn successor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &mut Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
@@ -616,30 +628,30 @@ impl<K: Ord, V> VebTree for BTreeMap<K, V> {
             Err(self)
         }
     }
-    fn min_val(&self) -> (MaybeBorrowed<Self::Key>, &Self::Value) {
+    fn min_val(&self) -> (MaybeBorrowed<'_, Self::Key>, &Self::Value) {
         let (k, v) = self.iter().next().unwrap();
         (MaybeBorrowed::Borrowed(k), v)
     }
-    fn min_val_mut(&mut self) -> (MaybeBorrowed<Self::Key>, &mut Self::Value) {
+    fn min_val_mut(&mut self) -> (MaybeBorrowed<'_, Self::Key>, &mut Self::Value) {
         let (k, v) = self.iter_mut().next().unwrap();
         (MaybeBorrowed::Borrowed(k), v)
     }
-    fn max_val(&self) -> (MaybeBorrowed<Self::Key>, &Self::Value) {
+    fn max_val(&self) -> (MaybeBorrowed<'_, Self::Key>, &Self::Value) {
         let (k, v) = self.iter().next_back().unwrap();
         (MaybeBorrowed::Borrowed(k), v)
     }
-    fn max_val_mut(&mut self) -> (MaybeBorrowed<Self::Key>, &mut Self::Value) {
+    fn max_val_mut(&mut self) -> (MaybeBorrowed<'_, Self::Key>, &mut Self::Value) {
         let (k, v) = self.iter_mut().next_back().unwrap();
         (MaybeBorrowed::Borrowed(k), v)
     }
-    fn find<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    fn find<Q>(&self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
         let k = k.borrow();
         <BTreeMap<K, V>>::get_key_value(self, k).map(|(k, v)| (MaybeBorrowed::Borrowed(k), v))
     }
-    fn find_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn find_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &mut Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
@@ -650,7 +662,7 @@ impl<K: Ord, V> VebTree for BTreeMap<K, V> {
             })
         })
     }
-    fn predecessor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    fn predecessor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
@@ -662,7 +674,10 @@ impl<K: Ord, V> VebTree for BTreeMap<K, V> {
     /// Find the predecessor to a key, if the tree contains such a value.
     ///
     /// Complexity is expected to be `O(lg lg K)`.
-    fn predecessor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn predecessor_mut<Q>(
+        &mut self,
+        k: Q,
+    ) -> Option<(MaybeBorrowed<'_, Self::Key>, &mut Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
@@ -671,7 +686,7 @@ impl<K: Ord, V> VebTree for BTreeMap<K, V> {
             .next_back()
             .map(|(k, v)| (MaybeBorrowed::Borrowed(k), v))
     }
-    fn successor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &Self::Value)>
+    fn successor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
@@ -680,7 +695,7 @@ impl<K: Ord, V> VebTree for BTreeMap<K, V> {
             .next()
             .map(|(k, v)| (MaybeBorrowed::Borrowed(k), v))
     }
-    fn successor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<Self::Key>, &mut Self::Value)>
+    fn successor_mut<Q>(&mut self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &mut Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {

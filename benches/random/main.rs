@@ -1,13 +1,10 @@
 use criterion::{
-    black_box, criterion_group, criterion_main, measurement::Measurement, BatchSize,
-    BenchmarkGroup, BenchmarkId, Criterion,
+    criterion_group, criterion_main, measurement::Measurement, BatchSize, BenchmarkGroup,
+    BenchmarkId, Criterion,
 };
-use rand::{
-    distributions::{Bernoulli, Uniform},
-    prelude::StdRng,
-    Rng, SeedableRng,
-};
-use std::{collections::BTreeMap, time::Duration};
+use rand::{prelude::StdRng, RngExt, SeedableRng};
+use rand_distr::{Bernoulli, Uniform};
+use std::{collections::BTreeMap, hint::black_box, time::Duration};
 
 use veb_tree::{
     markers::{Marker32, Marker32Empty, VebTreeType},
@@ -155,7 +152,7 @@ fn for_all_widths<'a, M: Measurement, Tree, Ret>(
 
     for bits in 4..=30 {
         let capacity = 1 << bits;
-        let distr = Uniform::from(0..capacity);
+        let distr = Uniform::new(0, capacity).unwrap();
         let mut rng = StdRng::seed_from_u64(0);
         let mut s = None;
         group.bench_function(BenchmarkId::from_parameter(bits), |b| {
