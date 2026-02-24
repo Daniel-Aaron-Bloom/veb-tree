@@ -11,7 +11,7 @@ ghost = "0.1"
 hashbrown = "0.16"
 typenum = "1"
 generic-array = "1"
-polonius-the-crab = "0.3"
+polonius-the-crab = "0.5"
 vec-entry = "0.1.0"
 
 [dev-dependencies]

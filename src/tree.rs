@@ -1,6 +1,7 @@
 use core::{borrow::Borrow, cmp::Ordering, mem::replace};
 
 use ghost::phantom;
+use polonius_the_crab::{ForLt, Placeholder, PoloniusResult, polonius};
 
 use crate::collection::{SuperTreeCollection, TreeCollection, VebTreeCollectionMarker};
 use crate::key::{MaybeBorrowed, VebKey, VebKeyRef};
@@ -283,12 +284,6 @@ where
         k.split_ref(|hi, lo| {
             // FIXME: rust-lang/rust#43234
             // Remove this polonius hack when NLL works
-            use polonius_the_crab::{polonius, WithLifetime};
-            type RetRef<K, V> = dyn for<'lt> WithLifetime<
-                'lt,
-                T = (MaybeBorrowed<'lt, <K as VebKey>::Lo>, &'lt mut V),
-            >;
-
             trait PoloniusExt {
                 type Hi;
                 type Lo;
@@ -315,17 +310,20 @@ where
             }
 
             let polonius = {
-                polonius::<RetRef<K, V>, _, _, _>(children, move |children| {
+                polonius::<_, _, ForLt!((MaybeBorrowed<'_, <K as VebKey>::Lo>, &'_ mut V))>(children, move |children: &mut <<Children as VebTreeCollectionMarker<K, V>>::TreeCollection as SuperTreeCollection<K, V>>::TC|  -> PoloniusResult<(MaybeBorrowed<'_, <K as VebKey>::Lo>, &'_ mut V), ()> {
                     // Polonius hates doing this in the lambda
-                    // children.get_mut(hi).and_then(|child| child.successor_mut(lo)).ok_or(())
+                    // children.get_mut(hi).and_then(|child| child.successor_mut(lo))
                     // but is perfectly fine with calling it blindly through a trait extension
-                    children.get_mut_predecessor_mut(hi, lo).ok_or(())
+                    match children.get_mut_predecessor_mut(hi, lo) {
+                        Some(v) => PoloniusResult::Borrowing(v),
+                        None => PoloniusResult::Owned { value: (), input_borrow: Placeholder }
+                    }
                 })
             };
 
             let children = match polonius {
-                Ok((lo, val)) => return Some((MaybeBorrowed::Owned(K::join(hi.into(), lo)), val)),
-                Err((children, ())) => children,
+                PoloniusResult::Borrowing((lo, val)) => return Some((MaybeBorrowed::Owned(K::join(hi.into(), lo)), val)),
+                PoloniusResult::Owned{ value: _, input_borrow: children }=> children,
             };
 
             // If we didn't find it, find the predecessor to `hi` in the summary and use the `min` of that node
@@ -412,12 +410,6 @@ where
         k.split_ref(|hi, lo| {
             // FIXME: rust-lang/rust#43234
             // Remove this polonius hack when NLL works
-            use polonius_the_crab::{polonius, WithLifetime};
-            type RetRef<K, V> = dyn for<'lt> WithLifetime<
-                'lt,
-                T = (MaybeBorrowed<'lt, <K as VebKey>::Lo>, &'lt mut V),
-            >;
-
             trait PoloniusExt {
                 type Hi;
                 type Lo;
@@ -444,16 +436,19 @@ where
             }
 
             let polonius = {
-                polonius::<RetRef<K, V>, _, _, _>(children, move |children| {
+                polonius::<_, _, ForLt!((MaybeBorrowed<'_, <K as VebKey>::Lo>, &'_ mut V))>(children, move |children| -> PoloniusResult<(MaybeBorrowed<'_, <K as VebKey>::Lo>, &'_ mut V), ()> {
                     // Polonius hates doing this in the lambda
-                    // children.get_mut(hi).and_then(|child| child.successor_mut(lo)).ok_or(())
+                    // children.get_mut(hi).and_then(|child| child.successor_mut(lo))
                     // but is perfectly fine with calling it blindly through a trait extension
-                    children.get_mut_successor_mut(hi, lo).ok_or(())
+                    match children.get_mut_successor_mut(hi, lo) {
+                        Some(v) => PoloniusResult::Borrowing(v),
+                        None => PoloniusResult::Owned { value: (), input_borrow: Placeholder }
+                    }
                 })
             };
             let children = match polonius {
-                Ok((lo, val)) => return Some((MaybeBorrowed::Owned(K::join(hi.into(), lo)), val)),
-                Err((children, ())) => children,
+                PoloniusResult::Borrowing((lo, val)) => return Some((MaybeBorrowed::Owned(K::join(hi.into(), lo)), val)),
+                PoloniusResult::Owned{ value: _, input_borrow: children } => children,
             };
 
             // If we didn't find it, find the successor to `hi` in the summary and use the `min` of that node
