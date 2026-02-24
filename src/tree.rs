@@ -1,7 +1,7 @@
 use core::{borrow::Borrow, cmp::Ordering, mem::replace};
 
 use ghost::phantom;
-use polonius_the_crab::{ForLt, Placeholder, PoloniusResult, polonius};
+use polonius_the_crab::{polonius, ForLt, Placeholder, PoloniusResult};
 
 use crate::collection::{SuperTreeCollection, TreeCollection, VebTreeCollectionMarker};
 use crate::key::{MaybeBorrowed, VebKey, VebKeyRef};
@@ -221,7 +221,10 @@ where
             }
             (Ordering::Equal, Some((summary, children))) => {
                 let (hi, ()) = summary.max_val();
-                let child = children.get(&hi).unwrap();
+                // SAFETY: summary keys correspond to children - hi is from summary so child must exist
+                let child = children
+                    .get(&hi)
+                    .expect("child should exist for summary key");
                 let (lo, val) = child.max_val();
                 return Some((MaybeBorrowed::Owned(K::join(hi, lo)), val));
             }
@@ -238,7 +241,10 @@ where
 
             // If we didn't find it, find the predecessor to `hi` in the summary and use the `min` of that node
             if let Some((hi, ())) = summary.predecessor(hi) {
-                let child = children.get(&hi).unwrap();
+                // SAFETY: summary keys correspond to children - hi is from summary so child must exist
+                let child = children
+                    .get(&hi)
+                    .expect("child should exist for summary key");
                 let (lo, val) = child.max_val();
                 return Some((MaybeBorrowed::Owned(K::join(hi, lo)), val));
             }
@@ -274,7 +280,10 @@ where
                 debug_assert!(*k.borrow() > self.min.0);
 
                 let (hi, ()) = summary.max_val();
-                let child = children.get_mut(&hi).unwrap();
+                // SAFETY: summary keys correspond to children - hi is from summary so child must exist
+                let child = children
+                    .get_mut(&hi)
+                    .expect("child should exist for summary key");
                 let (lo, val) = child.max_val_mut();
                 return Some((MaybeBorrowed::Owned(K::join(hi, lo)), val));
             }
@@ -328,7 +337,8 @@ where
 
             // If we didn't find it, find the predecessor to `hi` in the summary and use the `min` of that node
             if let Some((hi, ())) = summary.predecessor(hi) {
-                let child = children.get_mut(&hi).unwrap();
+                // SAFETY: summary keys correspond to children - hi is from summary so child must exist
+                let child = children.get_mut(&hi).expect("child should exist for summary key");
                 let (lo, val) = child.max_val_mut();
                 return Some((MaybeBorrowed::Owned(K::join(hi, lo)), val));
             }
@@ -358,7 +368,10 @@ where
         };
         if *k == self.min.0 {
             let (hi, ()) = summary.min_val();
-            let child = children.get(&hi).unwrap();
+            // SAFETY: summary keys correspond to children - hi is from summary so child must exist
+            let child = children
+                .get(&hi)
+                .expect("child should exist for summary key");
             let (lo, val) = child.min_val();
             return Some((MaybeBorrowed::Owned(K::join(hi, lo)), val));
         }
@@ -373,7 +386,10 @@ where
 
             // If we didn't find it, find the successor to `hi` in the summary and use the `min` of that node
             if let Some((hi, ())) = summary.successor(hi) {
-                let child = children.get(&hi).unwrap();
+                // SAFETY: summary keys correspond to children - hi is from summary so child must exist
+                let child = children
+                    .get(&hi)
+                    .expect("child should exist for summary key");
                 let (lo, val) = child.min_val();
                 return Some((MaybeBorrowed::Owned(K::join(hi, lo)), val));
             }
@@ -402,7 +418,10 @@ where
         };
         if *k == self.min.0 {
             let (hi, ()) = summary.min_val();
-            let child = children.get_mut(&hi).unwrap();
+            // SAFETY: summary keys correspond to children - hi is from summary so child must exist
+            let child = children
+                .get_mut(&hi)
+                .expect("child should exist for summary key");
             let (lo, val) = child.min_val_mut();
             return Some((MaybeBorrowed::Owned(K::join(hi, lo)), val));
         }
@@ -436,24 +455,41 @@ where
             }
 
             let polonius = {
-                polonius::<_, _, ForLt!((MaybeBorrowed<'_, <K as VebKey>::Lo>, &'_ mut V))>(children, move |children| -> PoloniusResult<(MaybeBorrowed<'_, <K as VebKey>::Lo>, &'_ mut V), ()> {
-                    // Polonius hates doing this in the lambda
-                    // children.get_mut(hi).and_then(|child| child.successor_mut(lo))
-                    // but is perfectly fine with calling it blindly through a trait extension
-                    match children.get_mut_successor_mut(hi, lo) {
-                        Some(v) => PoloniusResult::Borrowing(v),
-                        None => PoloniusResult::Owned { value: (), input_borrow: Placeholder }
-                    }
-                })
+                polonius::<_, _, ForLt!((MaybeBorrowed<'_, <K as VebKey>::Lo>, &'_ mut V))>(
+                    children,
+                    move |children| -> PoloniusResult<
+                        (MaybeBorrowed<'_, <K as VebKey>::Lo>, &'_ mut V),
+                        (),
+                    > {
+                        // Polonius hates doing this in the lambda
+                        // children.get_mut(hi).and_then(|child| child.successor_mut(lo))
+                        // but is perfectly fine with calling it blindly through a trait extension
+                        match children.get_mut_successor_mut(hi, lo) {
+                            Some(v) => PoloniusResult::Borrowing(v),
+                            None => PoloniusResult::Owned {
+                                value: (),
+                                input_borrow: Placeholder,
+                            },
+                        }
+                    },
+                )
             };
             let children = match polonius {
-                PoloniusResult::Borrowing((lo, val)) => return Some((MaybeBorrowed::Owned(K::join(hi.into(), lo)), val)),
-                PoloniusResult::Owned{ value: _, input_borrow: children } => children,
+                PoloniusResult::Borrowing((lo, val)) => {
+                    return Some((MaybeBorrowed::Owned(K::join(hi.into(), lo)), val))
+                }
+                PoloniusResult::Owned {
+                    value: _,
+                    input_borrow: children,
+                } => children,
             };
 
             // If we didn't find it, find the successor to `hi` in the summary and use the `min` of that node
             if let Some((hi, ())) = summary.successor(hi) {
-                let child = children.get_mut(&hi).unwrap();
+                // SAFETY: summary keys correspond to children - hi is from summary so child must exist
+                let child = children
+                    .get_mut(&hi)
+                    .expect("child should exist for summary key");
                 let (lo, val) = child.min_val_mut();
                 return Some((MaybeBorrowed::Owned(K::join(hi, lo)), val));
             }
@@ -565,7 +601,16 @@ where
             let children = match children {
                 None => None,
                 Some((children, false)) => Some((summary, children)),
-                Some((children, true)) => Some((summary.remove_max().0.unwrap(), children)),
+                Some((children, true)) => {
+                    // SAFETY: summary has multiple elements so after removing one, it should still have elements
+                    Some((
+                        summary
+                            .remove_max()
+                            .0
+                            .expect("summary should have remaining elements after removal"),
+                        children,
+                    ))
+                }
             };
             self.data = Some(TreeData {
                 max: new_max,
@@ -579,10 +624,16 @@ where
                 Err(children) => (Some((summary, children)), None),
                 Ok((None, res)) => (None, Some(res)),
                 Ok((Some((children, false)), res)) => (Some((summary, children)), Some(res)),
-                Ok((Some((children, true)), res)) => (
-                    Some((summary.remove(hi).ok().unwrap().0.unwrap(), children)),
-                    Some(res),
-                ),
+                Ok((Some((children, true)), res)) => {
+                    // SAFETY: hi is in summary so remove should succeed, and summary has multiple elements so should remain after removal
+                    let remaining_summary = summary
+                        .remove(hi)
+                        .ok()
+                        .expect("summary should contain key")
+                        .0
+                        .expect("summary should have remaining elements after removal");
+                    (Some((remaining_summary, children)), Some(res))
+                }
             };
 
             self.data = Some(TreeData {
@@ -625,7 +676,16 @@ where
         let children = match children {
             None => None,
             Some((children, false)) => Some((summary, children)),
-            Some((children, true)) => Some((summary.remove_min().0.unwrap(), children)),
+            Some((children, true)) => {
+                // SAFETY: summary has multiple elements so after removing one, it should still have elements
+                Some((
+                    summary
+                        .remove_min()
+                        .0
+                        .expect("summary should have remaining elements after removal"),
+                    children,
+                ))
+            }
         };
         self.data = Some(TreeData { max, children });
         let r = replace(&mut self.min, (min, val));
@@ -657,7 +717,16 @@ where
         let children = match children {
             None => None,
             Some((children, false)) => Some((summary, children)),
-            Some((children, true)) => Some((summary.remove_max().0.unwrap(), children)),
+            Some((children, true)) => {
+                // SAFETY: summary has multiple elements so after removing one, it should still have elements
+                Some((
+                    summary
+                        .remove_max()
+                        .0
+                        .expect("summary should have remaining elements after removal"),
+                    children,
+                ))
+            }
         };
         self.data = Some(TreeData {
             max: new_max,

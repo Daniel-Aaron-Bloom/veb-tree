@@ -66,7 +66,11 @@ impl ByteSet {
                 .unwrap_or_default(),
         ]
     }
-    /// Create a mask for the bits under bit i
+
+    /// Create a mask with all bits set that are strictly greater than bit i.
+    ///
+    /// Returns a 256-bit mask (as [u128; 2]) where bits at positions > i are set to 1,
+    /// and all other bits (including bit i itself) are set to 0.
     #[inline(always)]
     fn mask_higher(i: u8) -> [u128; 2] {
         [
@@ -258,6 +262,82 @@ mod test {
             let mut mask = ByteSet::mask_lower(i);
             mask &= ByteSet::from_monad(i, ());
             assert_eq!(mask, [0, 0])
+        }
+    }
+
+    #[test]
+    fn test_mask_higher() {
+        // Test boundary case: i=0 should have all bits 1-255 set
+        assert_eq!(ByteSet::mask_higher(0), [u128::MAX << 1, u128::MAX]);
+
+        // Test boundary case: i=255 should have no bits set
+        assert_eq!(ByteSet::mask_higher(255), [0, 0]);
+
+        // Test first u128 range (bits 0-126)
+        for i in 0usize..127 {
+            let expected_first = u128::MAX.checked_shl(1 + i as u32).unwrap();
+            let expected_second = u128::MAX;
+            assert_eq!(
+                ByteSet::mask_higher(i as u8),
+                [expected_first, expected_second],
+                "Failed for i={i}"
+            );
+        }
+
+        // Test boundary between u128s: i=127
+        assert_eq!(ByteSet::mask_higher(127), [0, u128::MAX]);
+
+        // Test second u128 range (bits 128-254)
+        for i in 128usize..255 {
+            let expected_first = 0u128;
+            let expected_second = u128::MAX.checked_shl((i - 127) as u32).unwrap();
+            assert_eq!(
+                ByteSet::mask_higher(i as u8),
+                [expected_first, expected_second],
+                "Failed for i={i}"
+            );
+        }
+
+        // Verify that bit i itself is never included in the mask
+        for i in 0..=255 {
+            let mut mask = ByteSet::mask_higher(i);
+            mask &= ByteSet::from_monad(i, ());
+            assert_eq!(mask, [0, 0], "Bit {i} should not be in its own higher mask");
+        }
+
+        // Verify that mask_lower(i), bit i, and mask_higher(i) partition all bits
+        for i in 0..=255 {
+            let lower = ByteSet::mask_lower(i);
+            let higher = ByteSet::mask_higher(i);
+            let bit_i = ByteSet::from_monad(i, ()).0;
+
+            // Together they should cover all bits
+            let combined = [
+                lower[0] | bit_i[0] | higher[0],
+                lower[1] | bit_i[1] | higher[1],
+            ];
+            assert_eq!(
+                combined,
+                [u128::MAX, u128::MAX],
+                "Failed to partition all bits at i={i}"
+            );
+
+            // They should not overlap
+            assert_eq!(
+                [lower[0] & higher[0], lower[1] & higher[1]],
+                [0, 0],
+                "lower and higher masks overlap at i={i}"
+            );
+            assert_eq!(
+                [lower[0] & bit_i[0], lower[1] & bit_i[1]],
+                [0, 0],
+                "lower mask includes bit i at i={i}"
+            );
+            assert_eq!(
+                [higher[0] & bit_i[0], higher[1] & bit_i[1]],
+                [0, 0],
+                "higher mask includes bit i at i={i}"
+            );
         }
     }
 

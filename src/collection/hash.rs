@@ -84,7 +84,9 @@ where
             v
         });
         let removed = matches!(entry, RawEntryMut::Vacant(_));
-        let val = val.unwrap();
+        // SAFETY: val is always set inside replace_entry_with closure
+        let val: (<V as VebTree>::Key, <V as VebTree>::Value) =
+            val.expect("val is always set in replace_entry_with");
         if self.is_empty() {
             (None, val)
         } else {

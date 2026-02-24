@@ -140,7 +140,8 @@ impl<V> List for VecDeque<V> {
         self.insert(i, v)
     }
     fn remove_value(mut self, i: usize) -> (Option<Self>, Self::Value) {
-        let v = self.remove(i).unwrap();
+        // SAFETY: List invariant - all lists are non-empty
+        let v = self.remove(i).expect("list should not be empty");
         (if self.is_empty() { None } else { Some(self) }, v)
     }
 }

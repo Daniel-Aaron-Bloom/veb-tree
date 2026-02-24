@@ -266,12 +266,13 @@ impl<L: list::List> VebTree for ByteMap<L> {
             }
             Ok((Some(set), (k, ()))) => {
                 let (list, v) = self.list.remove_value(i);
-                let list = list.unwrap();
+                // SAFETY: set and list emptiness must match - set is non-empty so list must be non-empty
+                let list = list.expect("set is non-empty so list should be non-empty");
                 Ok((Some(Self { list, set }), (k, v)))
             }
             Ok((None, (k, ()))) => {
                 let (list, v) = self.list.remove_value(i);
-                debug_assert!(list.is_none());
+                debug_assert!(list.is_none(), "set and list emptiness must match");
                 Ok((None, (k, v)))
             }
         }

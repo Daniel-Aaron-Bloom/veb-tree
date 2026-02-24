@@ -5,11 +5,12 @@ extern crate alloc;
 
 pub mod bitset;
 pub mod collection;
+pub mod iter;
 pub mod key;
 pub mod markers;
 pub mod tree;
 
-use core::{borrow::Borrow, mem::replace};
+use core::{borrow::Borrow, mem::replace, ops::Bound};
 
 use alloc::{boxed::Box, collections::BTreeMap};
 use key::MaybeBorrowed;
@@ -154,195 +155,8 @@ pub trait VebTree: Sized {
     fn remove_max(self) -> RemoveResult<Self>;
 }
 
-/// An iterator over the key-value pairs of a [`VebTree`]
-pub struct Iter<'a, V: VebTree> {
-    data: Option<IterData<'a, V>>,
-    emitted: usize,
-}
-
-enum IterData<'a, V: VebTree> {
-    Start(&'a V),
-    Front {
-        prev_key: MaybeBorrowed<'a, V::Key>,
-        tree: &'a V,
-    },
-    Back {
-        prev_key: MaybeBorrowed<'a, V::Key>,
-        tree: &'a V,
-    },
-    Both {
-        front_key: MaybeBorrowed<'a, V::Key>,
-        back_key: MaybeBorrowed<'a, V::Key>,
-        tree: &'a V,
-    },
-}
-
-impl<'a, V: VebTree> From<&'a V> for Iter<'a, V> {
-    fn from(v: &'a V) -> Self {
-        Self {
-            data: Some(IterData::Start(v)),
-            emitted: 0,
-        }
-    }
-}
-
-impl<'a, V: VebTree> Iterator for Iter<'a, V>
-where
-    V::Key: Clone,
-{
-    type Item = (MaybeBorrowed<'a, V::Key>, &'a V::Value);
-    fn next(&mut self) -> Option<Self::Item> {
-        use IterData::*;
-        let v = match self.data.take()? {
-            Start(tree) => {
-                let (prev_key, val) = tree.min_val();
-                self.data = Some(Front {
-                    prev_key: prev_key.clone(),
-                    tree,
-                });
-                (prev_key, val)
-            }
-            Front { prev_key, tree } => {
-                if let Some((prev_key, val)) = tree.successor(prev_key) {
-                    self.data = Some(Front {
-                        prev_key: prev_key.clone(),
-                        tree,
-                    });
-                    (prev_key, val)
-                } else {
-                    self.data = None;
-                    return None;
-                }
-            }
-            Back {
-                prev_key: back_key,
-                tree,
-            } => {
-                let (front_key, val) = tree.min_val();
-                if front_key.borrow() == back_key.borrow() {
-                    self.data = None;
-                    return None;
-                }
-                self.data = Some(Both {
-                    front_key: front_key.clone(),
-                    back_key,
-                    tree,
-                });
-                (front_key, val)
-            }
-            Both {
-                front_key,
-                back_key,
-                tree,
-            } => {
-                if let Some((front_key, val)) = tree.successor(front_key) {
-                    if front_key.borrow() == back_key.borrow() {
-                        self.data = None;
-                        return None;
-                    }
-                    self.data = Some(Both {
-                        front_key: front_key.clone(),
-                        back_key,
-                        tree,
-                    });
-                    (front_key, val)
-                } else {
-                    debug_assert!(false);
-                    self.data = None;
-                    return None;
-                }
-            }
-        };
-        self.emitted += 1;
-        Some(v)
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        use IterData::*;
-        match self.data {
-            None => (0, Some(0)),
-            Some(Start(tree) | Front { tree, .. } | Back { tree, .. } | Both { tree, .. }) => {
-                let (min, max) = tree.len_hint();
-
-                (
-                    min.saturating_sub(self.emitted),
-                    max.map(|max| max - self.emitted),
-                )
-            }
-        }
-    }
-}
-
-impl<'a, V: VebTree> DoubleEndedIterator for Iter<'a, V>
-where
-    V::Key: Clone,
-{
-    fn next_back(&mut self) -> Option<Self::Item> {
-        use IterData::*;
-        let v = match self.data.take()? {
-            Start(tree) => {
-                let (prev_key, val) = tree.max_val();
-                self.data = Some(Back {
-                    prev_key: prev_key.clone(),
-                    tree,
-                });
-                (prev_key, val)
-            }
-            Back { prev_key, tree } => {
-                if let Some((prev_key, val)) = tree.predecessor(prev_key) {
-                    self.data = Some(Back {
-                        prev_key: prev_key.clone(),
-                        tree,
-                    });
-                    (prev_key, val)
-                } else {
-                    self.data = None;
-                    return None;
-                }
-            }
-            Front {
-                prev_key: front_key,
-                tree,
-            } => {
-                let (back_key, val) = tree.max_val();
-                if front_key.borrow() == back_key.borrow() {
-                    self.data = None;
-                    return None;
-                }
-                self.data = Some(Both {
-                    front_key,
-                    back_key: back_key.clone(),
-                    tree,
-                });
-                (back_key, val)
-            }
-            Both {
-                front_key,
-                back_key,
-                tree,
-            } => {
-                if let Some((back_key, val)) = tree.predecessor(back_key) {
-                    if front_key.borrow() == back_key.borrow() {
-                        self.data = None;
-                        return None;
-                    }
-                    self.data = Some(Both {
-                        front_key,
-                        back_key: back_key.clone(),
-                        tree,
-                    });
-                    (back_key, val)
-                } else {
-                    debug_assert!(false);
-                    self.data = None;
-                    return None;
-                }
-            }
-        };
-        self.emitted += 1;
-        Some(v)
-    }
-}
+// Re-export Iter from the iter module
+pub use iter::Iter;
 
 impl<'a, V: VebTree> ExactSizeIterator for Iter<'a, SizedVebTree<V>> where V::Key: Clone {}
 
@@ -623,25 +437,36 @@ impl<K: Ord, V> VebTree for BTreeMap<K, V> {
     }
     fn into_monad(self) -> Result<TreeKV<Self>, Self> {
         if self.is_monad() {
-            Ok(self.into_iter().next().unwrap())
+            // SAFETY: is_monad() guarantees self.len() == 1, so next() must return Some
+            Ok(self
+                .into_iter()
+                .next()
+                .expect("monad BTreeMap should have one element"))
         } else {
             Err(self)
         }
     }
     fn min_val(&self) -> (MaybeBorrowed<'_, Self::Key>, &Self::Value) {
-        let (k, v) = self.iter().next().unwrap();
+        // SAFETY: VebTree invariant - all trees are non-empty
+        let (k, v) = self.iter().next().expect("tree should not be empty");
         (MaybeBorrowed::Borrowed(k), v)
     }
     fn min_val_mut(&mut self) -> (MaybeBorrowed<'_, Self::Key>, &mut Self::Value) {
-        let (k, v) = self.iter_mut().next().unwrap();
+        // SAFETY: VebTree invariant - all trees are non-empty
+        let (k, v) = self.iter_mut().next().expect("tree should not be empty");
         (MaybeBorrowed::Borrowed(k), v)
     }
     fn max_val(&self) -> (MaybeBorrowed<'_, Self::Key>, &Self::Value) {
-        let (k, v) = self.iter().next_back().unwrap();
+        // SAFETY: VebTree invariant - all trees are non-empty
+        let (k, v) = self.iter().next_back().expect("tree should not be empty");
         (MaybeBorrowed::Borrowed(k), v)
     }
     fn max_val_mut(&mut self) -> (MaybeBorrowed<'_, Self::Key>, &mut Self::Value) {
-        let (k, v) = self.iter_mut().next_back().unwrap();
+        // SAFETY: VebTree invariant - all trees are non-empty
+        let (k, v) = self
+            .iter_mut()
+            .next_back()
+            .expect("tree should not be empty");
         (MaybeBorrowed::Borrowed(k), v)
     }
     fn find<Q>(&self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &Self::Value)>
@@ -656,18 +481,17 @@ impl<K: Ord, V> VebTree for BTreeMap<K, V> {
         Q: Borrow<Self::Key>,
     {
         // Unfortunately there is no `get_key_value_mut` 😢
-        <BTreeMap<K, V>>::get_key_value(self, k.borrow()).map(|(k, v)| {
-            (MaybeBorrowed::Borrowed(k), unsafe {
-                &mut *<*const V>::cast_mut(v)
-            })
-        })
+        let k = k.borrow();
+        self.range_mut(k..=k)
+            .next()
+            .map(|(k, v)| (MaybeBorrowed::Borrowed(k), v))
     }
     fn predecessor<Q>(&self, k: Q) -> Option<(MaybeBorrowed<'_, Self::Key>, &Self::Value)>
     where
         Q: Borrow<Self::Key>,
     {
         let k = k.borrow();
-        self.range(..=k)
+        self.range(..k)
             .next_back()
             .map(|(k, v)| (MaybeBorrowed::Borrowed(k), v))
     }
@@ -682,7 +506,7 @@ impl<K: Ord, V> VebTree for BTreeMap<K, V> {
         Q: Borrow<Self::Key>,
     {
         let k = k.borrow();
-        self.range_mut(..=k)
+        self.range_mut(..k)
             .next_back()
             .map(|(k, v)| (MaybeBorrowed::Borrowed(k), v))
     }
@@ -691,7 +515,7 @@ impl<K: Ord, V> VebTree for BTreeMap<K, V> {
         Q: Borrow<Self::Key>,
     {
         let k = k.borrow();
-        self.range(k..)
+        self.range((Bound::Excluded(k), Bound::Unbounded))
             .next()
             .map(|(k, v)| (MaybeBorrowed::Borrowed(k), v))
     }
@@ -700,7 +524,7 @@ impl<K: Ord, V> VebTree for BTreeMap<K, V> {
         Q: Borrow<Self::Key>,
     {
         let k = k.borrow();
-        self.range_mut(k..)
+        self.range_mut((Bound::Excluded(k), Bound::Unbounded))
             .next()
             .map(|(k, v)| (MaybeBorrowed::Borrowed(k), v))
     }
@@ -729,14 +553,16 @@ impl<K: Ord, V> VebTree for BTreeMap<K, V> {
         }
     }
     fn remove_min(mut self) -> RemoveResult<Self> {
-        let v = self.pop_first().unwrap();
+        // SAFETY: VebTree invariant - all trees are non-empty
+        let v = self.pop_first().expect("tree should not be empty");
         let tree = if self.is_empty() { None } else { Some(self) };
 
         (tree, v)
     }
 
     fn remove_max(mut self) -> RemoveResult<Self> {
-        let v = self.pop_last().unwrap();
+        // SAFETY: VebTree invariant - all trees are non-empty
+        let v = self.pop_last().expect("tree should not be empty");
         let tree = if self.is_empty() { None } else { Some(self) };
 
         (tree, v)

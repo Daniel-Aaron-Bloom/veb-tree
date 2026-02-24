@@ -142,7 +142,12 @@ where
         R: FnOnce(Self::Tree) -> RemoveResult<Self::Tree>,
     {
         let h = h.borrow();
-        let t = self.array.get_mut(h.index()).take().unwrap();
+        // SAFETY: array is expected to contain a tree at the key's index
+        let t = self
+            .array
+            .get_mut(h.index())
+            .take()
+            .expect("array should contain tree at key index");
         let (t, val) = r(t);
         let removed = t.is_none();
         if removed {
