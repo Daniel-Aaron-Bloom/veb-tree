@@ -637,18 +637,12 @@ mod tests {
 
         let mut iter = Iter::from(&tree);
 
-        assert_eq!(
-            iter.next().map(|(k, v)| (*k, *v)),
-            Some((10, "ten"))
-        );
+        assert_eq!(iter.next().map(|(k, v)| (*k, *v)), Some((10, "ten")));
         assert_eq!(
             iter.next_back().map(|(k, v)| (*k, *v)),
             Some((30, "thirty"))
         );
-        assert_eq!(
-            iter.next().map(|(k, v)| (*k, *v)),
-            Some((20, "twenty"))
-        );
+        assert_eq!(iter.next().map(|(k, v)| (*k, *v)), Some((20, "twenty")));
         assert_eq!(iter.next(), None);
     }
 

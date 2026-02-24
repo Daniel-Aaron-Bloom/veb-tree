@@ -16,6 +16,9 @@ pub trait TreeList: Sized {
     fn from_monad(v: Self::Tree) -> Self;
 
     fn len(&self) -> usize;
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
     fn get(&self, i: usize) -> &Self::Tree;
     fn get_mut(&mut self, i: usize) -> &mut Self::Tree;
     fn insert_tree(&mut self, i: usize, v: Self::Tree);
@@ -112,6 +115,9 @@ pub trait List: Sized {
     type Value;
     fn create() -> Self;
     fn len(&self) -> usize;
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
     fn get(&self, i: usize) -> &Self::Value;
     fn get_mut(&mut self, i: usize) -> &mut Self::Value;
     fn insert_value(&mut self, i: usize, v: Self::Value);

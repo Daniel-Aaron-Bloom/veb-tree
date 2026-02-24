@@ -168,8 +168,13 @@ pub struct SizedVebTree<V> {
 
 impl<V> SizedVebTree<V> {
     /// Returns the number of elements in the map.
+    #[inline(always)]
     pub fn len(&self) -> usize {
         self.size
+    }
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 
@@ -566,5 +571,161 @@ impl<K: Ord, V> VebTree for BTreeMap<K, V> {
         let tree = if self.is_empty() { None } else { Some(self) };
 
         (tree, v)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::collections::BTreeMap;
+
+    #[test]
+    fn btreemap_basic_operations() {
+        let mut tree: BTreeMap<u32, &str> = VebTree::from_monad(10, "ten");
+
+        assert!(tree.is_monad());
+        assert_eq!(tree.find(10), Some((MaybeBorrowed::Borrowed(&10), &"ten")));
+        assert_eq!(tree.find(20), None);
+
+        tree.insert(20, "twenty");
+        assert!(!tree.is_monad());
+        assert_eq!(
+            tree.find(20),
+            Some((MaybeBorrowed::Borrowed(&20), &"twenty"))
+        );
+    }
+
+    #[test]
+    fn btreemap_min_max() {
+        let mut tree: BTreeMap<u32, i32> = VebTree::from_monad(50, 500);
+        tree.insert(10, 100);
+        tree.insert(90, 900);
+
+        assert_eq!(tree.min_val(), (MaybeBorrowed::Borrowed(&10), &100));
+        assert_eq!(tree.max_val(), (MaybeBorrowed::Borrowed(&90), &900));
+    }
+
+    #[test]
+    fn btreemap_predecessor_successor() {
+        let mut tree: BTreeMap<u32, &str> = VebTree::from_monad(10, "a");
+        tree.insert(20, "b");
+        tree.insert(30, "c");
+
+        assert_eq!(
+            tree.predecessor(25),
+            Some((MaybeBorrowed::Borrowed(&20), &"b"))
+        );
+        assert_eq!(
+            tree.successor(15),
+            Some((MaybeBorrowed::Borrowed(&20), &"b"))
+        );
+        assert_eq!(tree.predecessor(10), None);
+        assert_eq!(tree.successor(30), None);
+    }
+
+    #[test]
+    fn btreemap_remove_operations() {
+        let mut tree: BTreeMap<u32, i32> = VebTree::from_monad(10, 100);
+        tree.insert(20, 200);
+        tree.insert(30, 300);
+
+        // Remove middle element
+        let (remaining, (k, v)) = tree.remove(20).ok().unwrap();
+        assert_eq!((k, v), (20, 200));
+        let tree = remaining.unwrap();
+
+        // Remove min
+        let (remaining, (k, v)) = tree.remove_min();
+        assert_eq!((k, v), (10, 100));
+        let tree = remaining.unwrap();
+
+        // Remove last element
+        let (remaining, (k, v)) = tree.remove_max();
+        assert_eq!((k, v), (30, 300));
+        assert!(remaining.is_none());
+    }
+
+    #[test]
+    fn btreemap_insert_replace() {
+        let mut tree: BTreeMap<u32, &str> = VebTree::from_monad(10, "old");
+        let replaced = tree.insert(10, "new");
+        // BTreeMap's VebTree::insert returns the key and old value
+        assert_eq!(replaced, Some("old"));
+        assert_eq!(tree.find(10), Some((MaybeBorrowed::Borrowed(&10), &"new")));
+    }
+
+    #[test]
+    fn btreemap_into_monad() {
+        let tree: BTreeMap<u32, i32> = VebTree::from_monad(42, 100);
+        let result = tree.into_monad();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (42, 100));
+    }
+
+    #[test]
+    fn sized_vebtree_len_tracking() {
+        use crate::markers::{Marker16, VebTreeType};
+        type U16Tree = VebTreeType<u16, i32, Marker16>;
+
+        let mut tree = SizedVebTree {
+            tree: U16Tree::from_monad(10, 100),
+            size: 1,
+        };
+
+        assert_eq!(tree.len(), 1);
+        assert_eq!(tree.len_hint(), (1, Some(1)));
+
+        tree.insert(20, 200);
+        assert_eq!(tree.len(), 2);
+
+        tree.insert(30, 300);
+        assert_eq!(tree.len(), 3);
+
+        // Replace existing
+        tree.insert(20, 250);
+        assert_eq!(tree.len(), 3); // Size unchanged
+
+        // Remove
+        let (remaining, _) = tree.remove(20).ok().unwrap();
+        let tree = remaining.unwrap();
+        assert_eq!(tree.len(), 2);
+    }
+
+    #[test]
+    fn sized_vebtree_remove_all() {
+        use crate::markers::{Marker16, VebTreeType};
+        type U16Tree = VebTreeType<u16, i32, Marker16>;
+
+        let mut tree = SizedVebTree {
+            tree: U16Tree::from_monad(10, 100),
+            size: 1,
+        };
+        tree.insert(20, 200);
+
+        let (tree, _) = tree.remove_min();
+        let tree = tree.unwrap();
+        assert_eq!(tree.len(), 1);
+
+        let (tree, _) = tree.remove_max();
+        assert!(tree.is_none());
+    }
+
+    #[test]
+    fn box_vebtree_operations() {
+        use crate::markers::{Marker16, VebTreeType};
+        type U16Tree = VebTreeType<u16, &'static str, Marker16>;
+
+        let mut tree: Box<U16Tree> = Box::new(VebTree::from_monad(10, "a"));
+
+        assert!(tree.is_monad());
+        tree.insert(20, "b");
+        assert!(!tree.is_monad());
+
+        assert_eq!(tree.min_val().0, MaybeBorrowed::Owned(10));
+        assert_eq!(tree.max_val().0, MaybeBorrowed::Owned(20));
+
+        let (remaining, (k, v)) = (*tree).remove(10).ok().expect("remove failed");
+        assert_eq!((k, v), (10, "a"));
+        assert!(remaining.is_some());
     }
 }

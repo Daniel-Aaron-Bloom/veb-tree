@@ -923,7 +923,7 @@ mod test {
         v.insert(14, "d");
         let r = v.remove(14).ok().expect("remove failed");
         v = r.0.expect("remove failed");
-        assert_eq!(r.1, ((14, "d")));
+        assert_eq!(r.1, (14, "d"));
         verify::<_, _, U16Tree>(
             &mut v,
             [
@@ -960,7 +960,7 @@ mod test {
 
         let r = v.remove(15).ok().expect("remove failed");
         v = r.0.expect("remove failed");
-        assert_eq!(r.1, ((15, "b")));
+        assert_eq!(r.1, (15, "b"));
         assert_eq!(v.min_val(), (MaybeBorrowed::Owned(10), &"a"));
         assert_eq!(v.max_val(), (MaybeBorrowed::Owned(13), &"c"));
         verify::<_, _, U16Tree>(
@@ -996,5 +996,155 @@ mod test {
                 (16, None),
             ],
         );
+    }
+
+    #[test]
+    fn monad_transitions() {
+        type U16Tree = VebTreeType<u16, i32, Marker16>;
+
+        // Start with monad
+        let mut v = U16Tree::from_monad(10, 100);
+        assert!(v.is_monad());
+
+        // Transition to 2 elements
+        v.insert(20, 200);
+        assert!(!v.is_monad());
+
+        // Back to monad
+        let (tree, (k, val)) = v.remove(20).ok().unwrap();
+        assert_eq!((k, val), (20, 200));
+        let v = tree.unwrap();
+        assert!(v.is_monad());
+
+        // Verify final state
+        assert_eq!(v.min_val().0, MaybeBorrowed::Owned(10));
+        assert_eq!(v.max_val().0, MaybeBorrowed::Owned(10));
+    }
+
+    #[test]
+    fn boundary_predecessor_successor() {
+        type U16Tree = VebTreeType<u16, &'static str, Marker16>;
+        let mut v = U16Tree::from_monad(10, "a");
+        v.insert(20, "b");
+        v.insert(30, "c");
+
+        // Predecessor of minimum should be None
+        assert_eq!(v.predecessor(10), None);
+        assert_eq!(v.predecessor(9), None);
+        assert_eq!(v.predecessor(0), None);
+
+        // Successor of maximum should be None
+        assert_eq!(v.successor(30), None);
+        assert_eq!(v.successor(31), None);
+        assert_eq!(v.successor(u16::MAX), None);
+
+        // Test boundaries
+        assert_eq!(v.predecessor(11), Some((MaybeBorrowed::Owned(10), &"a")));
+        assert_eq!(v.successor(29), Some((MaybeBorrowed::Owned(30), &"c")));
+    }
+
+    #[test]
+    fn remove_min_max_operations() {
+        type U16Tree = VebTreeType<u16, i32, Marker16>;
+        let mut v = U16Tree::from_monad(10, 100);
+        v.insert(20, 200);
+        v.insert(30, 300);
+        v.insert(40, 400);
+
+        // Remove min
+        let (tree, (k, val)) = v.remove_min();
+        assert_eq!((k, val), (10, 100));
+        let v = tree.unwrap();
+        assert_eq!(v.min_val().0, MaybeBorrowed::Owned(20));
+
+        // Remove max
+        let (tree, (k, val)) = v.remove_max();
+        assert_eq!((k, val), (40, 400));
+        let v = tree.unwrap();
+        assert_eq!(v.max_val().0, MaybeBorrowed::Owned(30));
+
+        // Remove remaining elements
+        let (tree, _) = v.remove_min();
+        let v = tree.unwrap();
+        assert!(v.is_monad());
+
+        let (tree, (k, val)) = v.remove_min();
+        assert_eq!((k, val), (30, 300));
+        assert!(tree.is_none());
+    }
+
+    #[test]
+    fn insert_replace_existing() {
+        type U16Tree = VebTreeType<u16, &'static str, Marker16>;
+        let mut v = U16Tree::from_monad(10, "old");
+
+        // Replace value
+        let replaced = v.insert(10, "new");
+        assert_eq!(replaced, Some((10, "old")));
+        assert_eq!(v.find(10), Some((MaybeBorrowed::Owned(10), &"new")));
+    }
+
+    #[test]
+    fn remove_nonexistent_key() {
+        type U16Tree = VebTreeType<u16, i32, Marker16>;
+        let mut v = U16Tree::from_monad(10, 100);
+        v.insert(20, 200);
+
+        // Try to remove non-existent key
+        let result = v.remove(15);
+        assert!(result.is_err());
+        let v = result.err().unwrap();
+
+        // Verify tree unchanged
+        assert!(v.find(10).is_some());
+        assert!(v.find(20).is_some());
+    }
+
+    #[test]
+    fn operations_on_large_tree() {
+        type U16Tree = VebTreeType<u16, u16, Marker16>;
+        let mut v = U16Tree::from_monad(0, 0);
+
+        // Insert many elements
+        for i in 1..100 {
+            v.insert(i * 10, i * 10);
+        }
+
+        // Verify all present
+        for i in 0..100 {
+            assert_eq!(
+                v.find(i * 10),
+                Some((MaybeBorrowed::Owned(i * 10), &(i * 10)))
+            );
+        }
+
+        // Verify min/max
+        assert_eq!(v.min_val().0, MaybeBorrowed::Owned(0));
+        assert_eq!(v.max_val().0, MaybeBorrowed::Owned(990));
+
+        // Test predecessor/successor in middle
+        assert_eq!(v.predecessor(505), Some((MaybeBorrowed::Owned(500), &500)));
+        assert_eq!(v.successor(505), Some((MaybeBorrowed::Owned(510), &510)));
+    }
+
+    #[test]
+    fn into_monad_error() {
+        type U16Tree = VebTreeType<u16, i32, Marker16>;
+        let mut v = U16Tree::from_monad(10, 100);
+        v.insert(20, 200);
+
+        // Try to convert non-monad to monad
+        let result = v.into_monad();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn into_monad_success() {
+        type U16Tree = VebTreeType<u16, i32, Marker16>;
+        let v = U16Tree::from_monad(42, 100);
+
+        let result = v.into_monad();
+        assert!(result.is_ok());
+        assert_eq!(result.ok().unwrap(), (42, 100));
     }
 }

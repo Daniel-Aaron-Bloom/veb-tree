@@ -196,3 +196,184 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{bitset::ByteSet, VebTree};
+    use alloc::boxed::Box;
+
+    type TestArray = ArrayTreeCollection<u8, Box<[Option<ByteSet>]>>;
+
+    #[test]
+    fn array_collection_create() {
+        let tree = ByteSet::from_monad(5, ());
+        let collection = TestArray::create(&10, tree);
+
+        assert_eq!(collection.count, 1);
+        assert!(collection.get(&10).is_some());
+        assert!(collection.get(&11).is_none());
+    }
+
+    #[test]
+    fn array_collection_get_operations() {
+        let tree = ByteSet::from_monad(5, ());
+        let mut collection = TestArray::create(&10, tree);
+
+        // Get existing key
+        assert!(collection.get(&10).is_some());
+        assert!(collection.get_mut(&10).is_some());
+
+        // Get non-existing key
+        assert!(collection.get(&20).is_none());
+        assert!(collection.get_mut(&20).is_none());
+
+        // Verify correct tree is returned
+        let retrieved = collection.get(&10).unwrap();
+        assert!(retrieved.is_present(5));
+    }
+
+    #[test]
+    fn array_collection_insert_new_key() {
+        let tree1 = ByteSet::from_monad(5, ());
+        let mut collection = TestArray::create(&10, tree1);
+
+        // Insert at new index
+        let result = collection.insert_key(20, (7, ()));
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 20);
+        assert_eq!(collection.count, 2);
+
+        // Verify both trees exist
+        assert!(collection.get(&10).is_some());
+        assert!(collection.get(&20).is_some());
+    }
+
+    #[test]
+    fn array_collection_insert_existing_key() {
+        let tree = ByteSet::from_monad(5, ());
+        let mut collection = TestArray::create(&10, tree);
+
+        // Insert into existing tree
+        let result = collection.insert_key(10, (7, ()));
+        assert!(result.is_err());
+        let (key, val) = result.unwrap_err();
+        assert_eq!(key, 10);
+        assert!(val.is_none()); // New element added to tree
+        assert_eq!(collection.count, 1); // Count unchanged
+    }
+
+    #[test]
+    fn array_collection_remove_last_element_in_tree() {
+        let tree = ByteSet::from_monad(5, ());
+        let collection = TestArray::create(&10, tree);
+
+        // Remove only element from tree
+        let (result, (key, _val)) = collection.remove_key(&10, |t| t.remove(5).unwrap());
+        assert!(result.is_none()); // Collection should be empty
+        assert_eq!(key, 5);
+    }
+
+    #[test]
+    fn array_collection_remove_one_element_from_tree() {
+        let mut tree = ByteSet::from_monad(5, ());
+        tree.insert(6, ());
+        let collection = TestArray::create(&10, tree);
+
+        // Remove one element, tree still has elements
+        let (result, (key, _val)) = collection.remove_key(&10, |t| t.remove(5).unwrap());
+        let (collection, removed) = result.unwrap();
+        assert_eq!(collection.count, 1); // Still 1 tree
+        assert!(!removed); // Tree not removed
+        assert_eq!(key, 5);
+
+        // Verify remaining element
+        let remaining_tree = collection.get(&10).unwrap();
+        assert!(remaining_tree.is_present(6));
+        assert!(!remaining_tree.is_present(5));
+    }
+
+    #[test]
+    fn array_collection_remove_entire_tree() {
+        let mut tree1 = ByteSet::from_monad(5, ());
+        tree1.insert(6, ());
+        let mut collection = TestArray::create(&10, tree1);
+
+        collection.insert_key(20, (7, ())).unwrap();
+        assert_eq!(collection.count, 2);
+
+        // Remove all elements from first tree
+        let (result, _) = collection.remove_key(&10, |t| t.remove(5).unwrap());
+        let (collection, removed) = result.unwrap();
+        assert!(!removed); // First removal didn't remove tree
+
+        let (result, _) = collection.remove_key(&10, |t| t.remove(6).unwrap());
+        let (collection, removed) = result.unwrap();
+        assert!(removed); // Second removal removed the tree
+        assert_eq!(collection.count, 1); // Only one tree left
+        assert!(collection.get(&10).is_none());
+        assert!(collection.get(&20).is_some());
+    }
+
+    #[test]
+    fn array_collection_maybe_remove_not_found() {
+        let tree = ByteSet::from_monad(5, ());
+        let collection = TestArray::create(&10, tree);
+
+        // Try to remove from non-existing key (array slot is None)
+        let result = collection.maybe_remove_key(&20, |t| t.remove(5));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn array_collection_maybe_remove_element_not_in_tree() {
+        let tree = ByteSet::from_monad(5, ());
+        let collection = TestArray::create(&10, tree);
+
+        // Try to remove element that doesn't exist in tree
+        let result = collection.maybe_remove_key(&10, |t| t.remove(99));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn array_collection_maybe_remove_success() {
+        let tree = ByteSet::from_monad(5, ());
+        let collection = TestArray::create(&10, tree);
+
+        let result = collection.maybe_remove_key(&10, |t| t.remove(5));
+        assert!(result.is_ok());
+        let (coll, (key, _val)) = result.ok().unwrap();
+        assert!(coll.is_none()); // Collection empty
+        assert_eq!(key, 5);
+    }
+
+    #[test]
+    fn array_collection_boundary_keys() {
+        // Test with min and max u8 values
+        let tree_min = ByteSet::from_monad(0, ());
+        let mut collection = TestArray::create(&0u8, tree_min);
+
+        collection.insert_key(255u8, (255, ())).unwrap();
+
+        assert!(collection.get(&0).is_some());
+        assert!(collection.get(&255).is_some());
+        assert_eq!(collection.count, 2);
+    }
+
+    #[test]
+    fn array_collection_all_slots_filled() {
+        // Create collection and fill multiple slots
+        let tree = ByteSet::from_monad(0, ());
+        let mut collection = TestArray::create(&0u8, tree);
+
+        // Add trees at various indices
+        for key in [1u8, 50, 100, 150, 200, 255] {
+            collection.insert_key(key, (key, ())).unwrap();
+        }
+
+        assert_eq!(collection.count, 7); // 0 + 6 more
+        for key in [0u8, 1, 50, 100, 150, 200, 255] {
+            assert!(collection.get(&key).is_some());
+        }
+    }
+}

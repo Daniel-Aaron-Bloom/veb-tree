@@ -30,6 +30,10 @@ impl ByteSet {
         Self::array_len(self.0)
     }
     #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    #[inline(always)]
     pub fn lowest(&self) -> u8 {
         (if self.0[0] == 0 {
             debug_assert_ne!(self.0[1], 0);

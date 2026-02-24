@@ -740,8 +740,235 @@ mod test {
     use super::*;
 
     #[test]
-    #[ignore]
-    fn signed() {
+    fn signed_i8_ordering() {
+        // Test all i8 values (only 256 values, fast enough)
+        for lhs in i8::MIN..=i8::MAX {
+            let (lh, ll) = lhs.split_val();
+            for rhs in i8::MIN..=i8::MAX {
+                let (rh, rl) = rhs.split_val();
+                assert_eq!(
+                    lhs.cmp(&rhs),
+                    (lh, ll).cmp(&(rh, rl)),
+                    "Failed for lhs={lhs}, rhs={rhs}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn signed_i16_ordering_sample() {
+        // Test a representative sample of i16 values
+        let test_values = [
+            i16::MIN,
+            i16::MIN + 1,
+            -1000,
+            -100,
+            -1,
+            0,
+            1,
+            100,
+            1000,
+            i16::MAX - 1,
+            i16::MAX,
+        ];
+
+        for &lhs in &test_values {
+            let (lh, ll) = lhs.split_val();
+            for &rhs in &test_values {
+                let (rh, rl) = rhs.split_val();
+                assert_eq!(
+                    lhs.cmp(&rhs),
+                    (lh, ll).cmp(&(rh, rl)),
+                    "Failed for lhs={lhs}, rhs={rhs}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn signed_i32_ordering_sample() {
+        let test_values = [
+            i32::MIN,
+            i32::MIN + 1,
+            -1000000,
+            -1000,
+            -1,
+            0,
+            1,
+            1000,
+            1000000,
+            i32::MAX - 1,
+            i32::MAX,
+        ];
+
+        for &lhs in &test_values {
+            let (lh, ll) = lhs.split_val();
+            for &rhs in &test_values {
+                let (rh, rl) = rhs.split_val();
+                assert_eq!(
+                    lhs.cmp(&rhs),
+                    (lh, ll).cmp(&(rh, rl)),
+                    "Failed for lhs={lhs}, rhs={rhs}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn signed_split_join_roundtrip() {
+        // Test split/join roundtrip for various signed types
+        let i8_values = [i8::MIN, -1, 0, 1, i8::MAX];
+        for &val in &i8_values {
+            let (hi, lo) = val.split_val();
+            let reconstructed = i8::join(hi.into(), lo.into());
+            assert_eq!(val, reconstructed, "i8 roundtrip failed for {val}");
+        }
+
+        let i16_values = [i16::MIN, -1000, -1, 0, 1, 1000, i16::MAX];
+        for &val in &i16_values {
+            let (hi, lo) = val.split_val();
+            let reconstructed = i16::join(hi.into(), lo.into());
+            assert_eq!(val, reconstructed, "i16 roundtrip failed for {val}");
+        }
+
+        let i32_values = [i32::MIN, -1000000, -1, 0, 1, 1000000, i32::MAX];
+        for &val in &i32_values {
+            let (hi, lo) = val.split_val();
+            let reconstructed = i32::join(hi.into(), lo.into());
+            assert_eq!(val, reconstructed, "i32 roundtrip failed for {val}");
+        }
+
+        let i64_values = [i64::MIN, -1000000000, -1, 0, 1, 1000000000, i64::MAX];
+        for &val in &i64_values {
+            let (hi, lo) = val.split_val();
+            let reconstructed = i64::join(hi.into(), lo.into());
+            assert_eq!(val, reconstructed, "i64 roundtrip failed for {val}");
+        }
+    }
+
+    #[test]
+    fn u2_bool_conversion() {
+        // Test all 4 possible U2 values
+        assert_eq!(
+            bool::from(U2::from(0u8)),
+            false,
+            "U2(0) should convert to false"
+        );
+        assert_eq!(
+            bool::from(U2::from(1u8)),
+            true,
+            "U2(1) should convert to true"
+        );
+        assert_eq!(
+            bool::from(U2::from(2u8)),
+            false,
+            "U2(2) should convert to false"
+        );
+        assert_eq!(
+            bool::from(U2::from(3u8)),
+            true,
+            "U2(3) should convert to true"
+        );
+    }
+
+    #[test]
+    fn u2_split_join_roundtrip() {
+        for i in 0..=3u8 {
+            let u2_val = U2::from(i);
+            let (hi, lo) = u2_val.split_val();
+            let reconstructed = U2::join(hi.into(), lo.into());
+            assert_eq!(u2_val, reconstructed, "U2 roundtrip failed for {i}");
+        }
+    }
+
+    #[test]
+    fn u4_split_join_roundtrip() {
+        for i in 0..=15u8 {
+            let u4_val = U4::from(i);
+            let (hi, lo) = u4_val.split_val();
+            let reconstructed = U4::join(hi.into(), lo.into());
+            assert_eq!(u4_val, reconstructed, "U4 roundtrip failed for {i}");
+        }
+    }
+
+    #[test]
+    fn unsigned_split_join_roundtrip() {
+        // Test u8
+        for val in 0..=255u8 {
+            let (hi, lo) = val.split_val();
+            let reconstructed = u8::join(hi.into(), lo.into());
+            assert_eq!(val, reconstructed, "u8 roundtrip failed for {val}");
+        }
+
+        // Test sample of larger types
+        let u16_values = [0u16, 1, 255, 256, 1000, u16::MAX - 1, u16::MAX];
+        for &val in &u16_values {
+            let (hi, lo) = val.split_val();
+            let reconstructed = u16::join(hi.into(), lo.into());
+            assert_eq!(val, reconstructed, "u16 roundtrip failed for {val}");
+        }
+
+        let u32_values = [0u32, 1, 65535, 65536, 1000000, u32::MAX - 1, u32::MAX];
+        for &val in &u32_values {
+            let (hi, lo) = val.split_val();
+            let reconstructed = u32::join(hi.into(), lo.into());
+            assert_eq!(val, reconstructed, "u32 roundtrip failed for {val}");
+        }
+
+        let u64_values = [0u64, 1, 0xFFFFFFFF, 0x100000000, u64::MAX - 1, u64::MAX];
+        for &val in &u64_values {
+            let (hi, lo) = val.split_val();
+            let reconstructed = u64::join(hi.into(), lo.into());
+            assert_eq!(val, reconstructed, "u64 roundtrip failed for {val}");
+        }
+    }
+
+    #[test]
+    fn array_key_split_join_roundtrip() {
+        // Test [T; 2]
+        let arr2 = [5u8, 10u8];
+        let (hi, lo) = arr2.split_val();
+        let reconstructed = <[u8; 2]>::join(hi.into(), lo.into());
+        assert_eq!(arr2, reconstructed, "[u8; 2] roundtrip failed");
+
+        // Test [T; 3]
+        let arr3 = [5u8, 10u8, 15u8];
+        let (hi, lo) = arr3.split_val();
+        let reconstructed = <[u8; 3]>::join(hi.into(), lo.into());
+        assert_eq!(arr3, reconstructed, "[u8; 3] roundtrip failed");
+
+        // Test [T; 4]
+        let arr4 = [1u8, 2u8, 3u8, 4u8];
+        let (hi, lo) = arr4.split_val();
+        let reconstructed = <[u8; 4]>::join(hi.into(), lo.into());
+        assert_eq!(arr4, reconstructed, "[u8; 4] roundtrip failed");
+
+        // Test [T; 8]
+        let arr8 = [1u8, 2, 3, 4, 5, 6, 7, 8];
+        let (hi, lo) = arr8.split_val();
+        let reconstructed = <[u8; 8]>::join(hi.into(), lo.into());
+        assert_eq!(arr8, reconstructed, "[u8; 8] roundtrip failed");
+    }
+
+    #[test]
+    fn array_key_ordering_preserved() {
+        // Test that array ordering matches tuple ordering
+        let arr1 = [1u8, 5u8];
+        let arr2 = [1u8, 10u8];
+        let arr3 = [2u8, 3u8];
+
+        let (h1, l1) = arr1.split_val();
+        let (h2, l2) = arr2.split_val();
+        let (h3, l3) = arr3.split_val();
+
+        assert_eq!(arr1.cmp(&arr2), (&h1, &l1).cmp(&(&h2, &l2)));
+        assert_eq!(arr1.cmp(&arr3), (&h1, &l1).cmp(&(&h3, &l3)));
+        assert_eq!(arr2.cmp(&arr3), (&h2, &l2).cmp(&(&h3, &l3)));
+    }
+
+    #[test]
+    #[ignore] // Very slow test - only run when needed
+    fn signed_i16_complete_ordering() {
         for lhs in i16::MIN..=i16::MAX {
             let (lh, ll) = lhs.split_val();
             for rhs in i16::MIN..=i16::MAX {
