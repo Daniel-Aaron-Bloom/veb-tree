@@ -605,10 +605,7 @@ mod tests {
 
     #[test]
     fn sized_iter_exact_size() {
-        let mut tree = SizedVebTree {
-            tree: U16Tree::from_monad(10, 1),
-            size: 1,
-        };
+        let mut tree = SizedVebTree::<U16Tree>::from_monad(10, 1);
         tree.insert(20, 2);
         tree.insert(30, 3);
 

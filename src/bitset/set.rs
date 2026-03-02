@@ -1,4 +1,4 @@
-use core::{borrow::Borrow, ops::BitAndAssign};
+use core::{borrow::Borrow, num::NonZeroUsize, ops::BitAndAssign};
 
 use crate::{key::MaybeBorrowed, tree::VebTreeMarker, MaybeRemoveResult, VebTree};
 
@@ -26,12 +26,8 @@ impl ByteSet {
         }
     }
     #[inline(always)]
-    pub fn len(&self) -> usize {
-        Self::array_len(self.0)
-    }
-    #[inline(always)]
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
+    pub fn len(&self) -> NonZeroUsize {
+        NonZeroUsize::new(Self::array_len(self.0)).expect("ByteSet should never be empty")
     }
     #[inline(always)]
     pub fn lowest(&self) -> u8 {
@@ -122,13 +118,13 @@ impl VebTree for ByteSet {
     }
     #[inline(always)]
     fn is_monad(&self) -> bool {
-        self.len() == 1
+        self.len().get() == 1
     }
     fn len_hint(&self) -> (usize, Option<usize>) {
-        (self.len(), Some(self.len()))
+        (self.len().get(), Some(self.len().get()))
     }
     fn into_monad(self) -> Result<(Self::Key, Self::Value), Self> {
-        if self.len() == 1 {
+        if self.is_monad() {
             Ok((self.lowest(), ()))
         } else {
             Err(self)
@@ -221,7 +217,7 @@ impl VebTree for ByteSet {
         let k = *k.borrow();
         if !self.is_present(k) {
             Err(self)
-        } else if self.len() == 1 {
+        } else if self.is_monad() {
             Ok((None, (k, ())))
         } else {
             self.unset_bit(k);
@@ -230,7 +226,7 @@ impl VebTree for ByteSet {
     }
     fn remove_min(mut self) -> (Option<Self>, (Self::Key, Self::Value)) {
         let k = self.lowest();
-        if self.len() == 1 {
+        if self.is_monad() {
             (None, (k, ()))
         } else {
             self.unset_bit(k);
@@ -239,7 +235,7 @@ impl VebTree for ByteSet {
     }
     fn remove_max(mut self) -> (Option<Self>, (Self::Key, Self::Value)) {
         let k = self.highest();
-        if self.len() == 1 {
+        if self.is_monad() {
             (None, (k, ()))
         } else {
             self.unset_bit(k);

@@ -4,7 +4,25 @@ use core::{
     ops::{BitOr, Shl, Shr},
 };
 
-use typenum::{op, Unsigned, U1, U128, U16, U2 as _U2, U32, U4 as _U4, U64, U8};
+use typenum::{op, Unsigned, U1, U2 as _U2, U4 as _U4, U8};
+
+#[cfg(target_pointer_width = "128")]
+use typenum::U128;
+#[cfg(any(
+    target_pointer_width = "128",
+    target_pointer_width = "64",
+    target_pointer_width = "32",
+    target_pointer_width = "16"
+))]
+use typenum::U16;
+#[cfg(any(
+    target_pointer_width = "128",
+    target_pointer_width = "64",
+    target_pointer_width = "32"
+))]
+use typenum::U32;
+#[cfg(any(target_pointer_width = "128", target_pointer_width = "64"))]
+use typenum::U64;
 
 #[derive(Clone, Copy, Debug, Eq)]
 pub enum MaybeBorrowed<'a, B> {
@@ -139,12 +157,9 @@ impl VebKey for u128 {
     }
 }
 impl CloneVebKeyRef for u128 {}
+#[cfg(target_pointer_width = "128")]
 impl SizedVebKey for u128 {
-    const CARDINALITY: usize = if usize::MAX as Self >= Self::MAX {
-        u128::MAX as usize
-    } else {
-        panic!("u128 is not sized on this platform")
-    };
+    const CARDINALITY: usize = u128::MAX as usize;
     type Cardinality = op!(U1 << U128);
     #[inline(always)]
     fn index(&self) -> usize {
@@ -165,12 +180,9 @@ impl VebKey for i128 {
     }
 }
 impl CloneVebKeyRef for i128 {}
+#[cfg(target_pointer_width = "128")]
 impl SizedVebKey for i128 {
-    const CARDINALITY: usize = if usize::MAX as u128 >= u128::MAX {
-        u128::MAX as usize
-    } else {
-        panic!("i128 is not sized on this platform")
-    };
+    const CARDINALITY: usize = u128::MAX as usize;
     type Cardinality = op!(U1 << U128);
     #[inline(always)]
     fn index(&self) -> usize {
@@ -192,12 +204,9 @@ impl VebKey for u64 {
     }
 }
 impl CloneVebKeyRef for u64 {}
+#[cfg(any(target_pointer_width = "128", target_pointer_width = "64"))]
 impl SizedVebKey for u64 {
-    const CARDINALITY: usize = if usize::MAX as Self >= Self::MAX {
-        Self::MAX as usize
-    } else {
-        panic!("u64 is not sized on this platform")
-    };
+    const CARDINALITY: usize = u64::MAX as usize;
     type Cardinality = op!(U1 << U64);
     #[inline(always)]
     fn index(&self) -> usize {
@@ -218,12 +227,9 @@ impl VebKey for i64 {
     }
 }
 impl CloneVebKeyRef for i64 {}
+#[cfg(any(target_pointer_width = "128", target_pointer_width = "64"))]
 impl SizedVebKey for i64 {
-    const CARDINALITY: usize = if usize::MAX as u64 >= u64::MAX {
-        u64::MAX as usize
-    } else {
-        panic!("i64 is not sized on this platform")
-    };
+    const CARDINALITY: usize = u64::MAX as usize;
     type Cardinality = op!(U1 << U64);
     #[inline(always)]
     fn index(&self) -> usize {
@@ -245,12 +251,13 @@ impl VebKey for u32 {
     }
 }
 impl CloneVebKeyRef for u32 {}
+#[cfg(any(
+    target_pointer_width = "128",
+    target_pointer_width = "64",
+    target_pointer_width = "32"
+))]
 impl SizedVebKey for u32 {
-    const CARDINALITY: usize = if usize::MAX as Self >= Self::MAX {
-        Self::MAX as usize
-    } else {
-        panic!("u32 is not sized on this platform")
-    };
+    const CARDINALITY: usize = u32::MAX as usize;
     type Cardinality = op!(U1 << U32);
     #[inline(always)]
     fn index(&self) -> usize {
@@ -271,12 +278,13 @@ impl VebKey for i32 {
     }
 }
 impl CloneVebKeyRef for i32 {}
+#[cfg(any(
+    target_pointer_width = "128",
+    target_pointer_width = "64",
+    target_pointer_width = "32"
+))]
 impl SizedVebKey for i32 {
-    const CARDINALITY: usize = if usize::MAX as u32 >= u32::MAX {
-        u32::MAX as usize
-    } else {
-        panic!("i32 is not sized on this platform")
-    };
+    const CARDINALITY: usize = usize::MAX;
     type Cardinality = op!(U1 << U32);
     #[inline(always)]
     fn index(&self) -> usize {
@@ -298,12 +306,14 @@ impl VebKey for u16 {
     }
 }
 impl CloneVebKeyRef for u16 {}
+#[cfg(any(
+    target_pointer_width = "128",
+    target_pointer_width = "64",
+    target_pointer_width = "32",
+    target_pointer_width = "16"
+))]
 impl SizedVebKey for u16 {
-    const CARDINALITY: usize = if usize::MAX as Self >= Self::MAX {
-        Self::MAX as usize
-    } else {
-        panic!("u16 is not sized on this platform")
-    };
+    const CARDINALITY: usize = u16::MAX as usize;
     type Cardinality = op!(U1 << U16);
     #[inline(always)]
     fn index(&self) -> usize {
@@ -324,12 +334,14 @@ impl VebKey for i16 {
     }
 }
 impl CloneVebKeyRef for i16 {}
+#[cfg(any(
+    target_pointer_width = "128",
+    target_pointer_width = "64",
+    target_pointer_width = "32",
+    target_pointer_width = "16"
+))]
 impl SizedVebKey for i16 {
-    const CARDINALITY: usize = if usize::MAX as u16 >= u16::MAX {
-        u16::MAX as usize
-    } else {
-        panic!("i16 is not sized on this platform")
-    };
+    const CARDINALITY: usize = usize::MAX;
     type Cardinality = op!(U1 << U16);
     #[inline(always)]
     fn index(&self) -> usize {
@@ -352,11 +364,7 @@ impl VebKey for u8 {
 }
 impl CloneVebKeyRef for u8 {}
 impl SizedVebKey for u8 {
-    const CARDINALITY: usize = if usize::MAX as u8 >= u8::MAX {
-        u8::MAX as usize
-    } else {
-        panic!("u8 is not sized on this platform")
-    };
+    const CARDINALITY: usize = u8::MAX as usize;
     type Cardinality = op!(U1 << U8);
     #[inline(always)]
     fn index(&self) -> usize {
@@ -378,11 +386,7 @@ impl VebKey for i8 {
 }
 impl CloneVebKeyRef for i8 {}
 impl SizedVebKey for i8 {
-    const CARDINALITY: usize = if usize::MAX as u8 >= u8::MAX {
-        u8::MAX as usize
-    } else {
-        panic!("i8 is not sized on this platform")
-    };
+    const CARDINALITY: usize = u8::MAX as usize;
     type Cardinality = op!(U1 << U8);
     #[inline(always)]
     fn index(&self) -> usize {

@@ -1,3 +1,5 @@
+use core::num::NonZeroUsize;
+
 use alloc::collections::VecDeque;
 
 use crate::{MaybeRemoveResult, RemoveResult, TreeKV, VebTree};
@@ -15,10 +17,7 @@ pub trait TreeList: Sized {
     type Tree: VebTree;
     fn from_monad(v: Self::Tree) -> Self;
 
-    fn len(&self) -> usize;
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
+    fn len(&self) -> NonZeroUsize;
     fn get(&self, i: usize) -> &Self::Tree;
     fn get_mut(&mut self, i: usize) -> &mut Self::Tree;
     fn insert_tree(&mut self, i: usize, v: Self::Tree);
@@ -41,8 +40,8 @@ impl<V: VebTree> TreeList for VecDeque<V> {
         VecDeque::from_iter([v])
     }
 
-    fn len(&self) -> usize {
-        self.len()
+    fn len(&self) -> NonZeroUsize {
+        NonZeroUsize::new(self.len()).expect("VecDeque should never be empty")
     }
     fn get(&self, i: usize) -> &Self::Tree {
         &self[i]
@@ -113,7 +112,7 @@ pub trait ListMarker<V> {
 
 pub trait List: Sized {
     type Value;
-    fn create() -> Self;
+    fn from_monad(v0: Self::Value) -> Self;
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool {
         self.len() == 0
@@ -130,8 +129,8 @@ impl<V> ListMarker<V> for VecDequeMarker {
 
 impl<V> List for VecDeque<V> {
     type Value = V;
-    fn create() -> Self {
-        VecDeque::new()
+    fn from_monad(v0: Self::Value) -> Self {
+        VecDeque::from_iter([v0])
     }
     fn len(&self) -> usize {
         self.len()

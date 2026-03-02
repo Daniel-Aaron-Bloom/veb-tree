@@ -29,3 +29,6 @@ bench = false
 
 #[profile.bench]
 #debug = true
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_pointer_width, values("128"))'] }

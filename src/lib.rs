@@ -10,18 +10,23 @@ pub mod key;
 pub mod markers;
 pub mod tree;
 
-use core::{borrow::Borrow, mem::replace, ops::Bound};
+use core::{borrow::Borrow, mem::replace, num::NonZeroUsize, ops::Bound};
 
 use alloc::{boxed::Box, collections::BTreeMap};
 use key::MaybeBorrowed;
 
-/// A shorthand for a kv-pair
+/// A shorthand for the kv-pair associated with the [`VebTree`] `VT`
 pub type TreeKV<VT> = (<VT as VebTree>::Key, <VT as VebTree>::Value);
 
 /// The possible results from a call to [`VebTree::remove_min`]/[`VebTree::remove_max`]
+/// 
+/// The first value is the modified tree with the element removed, or `None` if no elements remain after removal
 pub type RemoveResult<VT> = (Option<VT>, TreeKV<VT>);
 
 /// The possible results from a call to [`VebTree::remove`]
+/// 
+/// Returns <code>Ok([RemoveResult]\<VT\>)</code> if the removal succeeded,
+/// or `Err(VT)` if the key was not found and the collection is returned unchanged.
 pub type MaybeRemoveResult<VT> = Result<RemoveResult<VT>, VT>;
 
 pub trait VebTree: Sized {
@@ -163,20 +168,17 @@ impl<'a, V: VebTree> ExactSizeIterator for Iter<'a, SizedVebTree<V>> where V::Ke
 /// A [`VebTree`] that memorizes it's size
 pub struct SizedVebTree<V> {
     tree: V,
-    size: usize,
+    size: NonZeroUsize,
 }
 
 impl<V> SizedVebTree<V> {
     /// Returns the number of elements in the map.
     #[inline(always)]
-    pub fn len(&self) -> usize {
+    pub fn len(&self) -> NonZeroUsize {
         self.size
     }
-    #[inline(always)]
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
 }
+const ONE: NonZeroUsize = NonZeroUsize::new(1).unwrap();
 
 impl<V: VebTree> VebTree for SizedVebTree<V> {
     type Key = V::Key;
@@ -185,13 +187,13 @@ impl<V: VebTree> VebTree for SizedVebTree<V> {
     fn from_monad(key: Self::Key, val: Self::Value) -> Self {
         SizedVebTree {
             tree: V::from_monad(key, val),
-            size: 1,
+            size: ONE,
         }
     }
 
     fn is_monad(&self) -> bool {
         if self.tree.is_monad() {
-            debug_assert!(self.size == 1);
+            debug_assert!(self.size == ONE);
             true
         } else {
             false
@@ -199,7 +201,7 @@ impl<V: VebTree> VebTree for SizedVebTree<V> {
     }
 
     fn len_hint(&self) -> (usize, Option<usize>) {
-        (self.size, Some(self.size))
+        (self.size.get(), Some(self.size.get()))
     }
 
     fn into_monad(self) -> Result<(Self::Key, Self::Value), Self> {
@@ -273,7 +275,7 @@ impl<V: VebTree> VebTree for SizedVebTree<V> {
     fn insert(&mut self, k: Self::Key, v: Self::Value) -> Option<(Self::Key, Self::Value)> {
         let v = self.tree.insert(k, v);
         if v.is_none() {
-            self.size += 1;
+            self.size = self.size.checked_add(1).expect("size overflowed");
         }
         v
     }
@@ -285,7 +287,8 @@ impl<V: VebTree> VebTree for SizedVebTree<V> {
         match self.tree.remove(k) {
             Ok((Some(tree), r)) => {
                 self.tree = tree;
-                self.size -= 1;
+                self.size =
+                    NonZeroUsize::new(self.size.get() - 1).expect("last item didn't remove tree");
                 Ok((Some(self), r))
             }
             Ok((None, v)) => Ok((None, v)),
@@ -297,10 +300,11 @@ impl<V: VebTree> VebTree for SizedVebTree<V> {
     }
 
     fn remove_min(mut self) -> (Option<Self>, (Self::Key, Self::Value)) {
-        self.size -= 1;
+        let new_size = NonZeroUsize::new(self.size.get() - 1);
         let (tree, v) = self.tree.remove_min();
         if let Some(tree) = tree {
             self.tree = tree;
+            self.size = new_size.expect("last item didn't remove tree");
             (Some(self), v)
         } else {
             (None, v)
@@ -308,10 +312,11 @@ impl<V: VebTree> VebTree for SizedVebTree<V> {
     }
 
     fn remove_max(mut self) -> (Option<Self>, (Self::Key, Self::Value)) {
-        self.size -= 1;
+        let new_size = NonZeroUsize::new(self.size.get() - 1);
         let (tree, v) = self.tree.remove_max();
         if let Some(tree) = tree {
             self.tree = tree;
+            self.size = new_size.expect("last item didn't remove tree");
             (Some(self), v)
         } else {
             (None, v)
@@ -648,9 +653,9 @@ mod tests {
     #[test]
     fn btreemap_insert_replace() {
         let mut tree: BTreeMap<u32, &str> = VebTree::from_monad(10, "old");
-        let replaced = tree.insert(10, "new");
+        let replaced = VebTree::insert(&mut tree, 10, "new");
         // BTreeMap's VebTree::insert returns the key and old value
-        assert_eq!(replaced, Some("old"));
+        assert_eq!(replaced, Some((10, "old")));
         assert_eq!(tree.find(10), Some((MaybeBorrowed::Borrowed(&10), &"new")));
     }
 
@@ -667,28 +672,25 @@ mod tests {
         use crate::markers::{Marker16, VebTreeType};
         type U16Tree = VebTreeType<u16, i32, Marker16>;
 
-        let mut tree = SizedVebTree {
-            tree: U16Tree::from_monad(10, 100),
-            size: 1,
-        };
+        let mut tree = SizedVebTree::<U16Tree>::from_monad(10, 100);
 
-        assert_eq!(tree.len(), 1);
+        assert_eq!(tree.len().get(), 1);
         assert_eq!(tree.len_hint(), (1, Some(1)));
 
         tree.insert(20, 200);
-        assert_eq!(tree.len(), 2);
+        assert_eq!(tree.len().get(), 2);
 
         tree.insert(30, 300);
-        assert_eq!(tree.len(), 3);
+        assert_eq!(tree.len().get(), 3);
 
         // Replace existing
         tree.insert(20, 250);
-        assert_eq!(tree.len(), 3); // Size unchanged
+        assert_eq!(tree.len().get(), 3); // Size unchanged
 
         // Remove
         let (remaining, _) = tree.remove(20).ok().unwrap();
         let tree = remaining.unwrap();
-        assert_eq!(tree.len(), 2);
+        assert_eq!(tree.len().get(), 2);
     }
 
     #[test]
@@ -696,15 +698,12 @@ mod tests {
         use crate::markers::{Marker16, VebTreeType};
         type U16Tree = VebTreeType<u16, i32, Marker16>;
 
-        let mut tree = SizedVebTree {
-            tree: U16Tree::from_monad(10, 100),
-            size: 1,
-        };
+        let mut tree = SizedVebTree::<U16Tree>::from_monad(10, 100);
         tree.insert(20, 200);
 
         let (tree, _) = tree.remove_min();
         let tree = tree.unwrap();
-        assert_eq!(tree.len(), 1);
+        assert_eq!(tree.len().get(), 1);
 
         let (tree, _) = tree.remove_max();
         assert!(tree.is_none());

@@ -133,11 +133,9 @@ impl<L: list::List> VebTree for ByteMap<L> {
     type Value = L::Value;
 
     fn from_monad(key: Self::Key, val: Self::Value) -> Self {
-        let mut list = L::create();
-        list.insert_value(0, val);
         Self {
             set: ByteSet::from_monad(key, ()),
-            list,
+            list: L::from_monad(val),
         }
     }
 

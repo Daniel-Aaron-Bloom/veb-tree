@@ -27,17 +27,41 @@ pub trait VebTreeCollectionMarker<K: VebKey, V> {
     type TreeCollection: SuperTreeCollection<K, V>;
 }
 
+/// A key-value pair from a tree in the collection
 pub type CollectionKV<TC> = TreeKV<<TC as TreeCollection>::Tree>;
 
+/// Result type for [`TreeCollection::insert_key`]
+///
+/// Returns `Ok(Hi)` if the collection did not contain a tree at the given key,
+/// indicating a new entry should be recorded in the summary.
+///
+/// Returns <code>Err((Hi, Option<[CollectionKV]\<TC\>>))</code> if the tree already existed,
+/// where the optional value is the pre-existing key-value pair that was replaced.
 pub type TreeInsertResult<TC> =
     Result<<TC as TreeCollection>::Hi, (<TC as TreeCollection>::Hi, Option<CollectionKV<TC>>)>;
+
+/// Result type for [`TreeCollection::remove_key`]
+///
+/// Returns <code>(Option<(TC, bool)>, [CollectionKV]\<TC\>)</code> where:
+/// - The first element is `None` if the entire collection was emptied by the removal
+///   or `Some((collection, is_empty))` if the collection still exists,
+///   with `is_empty` indicating whether the tree was emptied
+/// - The second element is the removed key-value pair
 pub type TreeRemoveResult<TC> = (Option<(TC, bool)>, CollectionKV<TC>);
+
+/// Result type for [`TreeCollection::maybe_remove_key`]
+///
+/// Returns `Ok(TreeRemoveResult<TC>)` if the removal succeeded,
+/// or `Err(TC)` if the key was not found and the collection is returned unchanged.
 pub type TreeMaybeRemoveResult<TC> = Result<TreeRemoveResult<TC>, TC>;
 
+/// A collection of [`VebTree`](Self::Tree)s, indexed by a [`Hi`](Self::Hi) key.
+/// 
 /// All operations are assumed to be `O(1)` complexity
 pub trait TreeCollection: Sized {
     /// The key used to index this collection
     type Hi;
+
     /// The type of the trees stored in this collection
     type Tree: VebTree;
 
@@ -59,7 +83,8 @@ pub trait TreeCollection: Sized {
     /// are returned
     fn insert_key(&mut self, h: Self::Hi, lv: CollectionKV<Self>) -> TreeInsertResult<Self>;
 
-    /// Remove a value from a tree contained within.
+    /// Remove a value from a tree contained within. Must be called with a value contained by the tree.
+    /// Panics if the value was not contained.
     ///
     /// If the tree containing the value is a monad, it will be removed from
     /// the collection. If there are no remaning trees the entire collection
